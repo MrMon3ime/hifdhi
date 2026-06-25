@@ -40,6 +40,45 @@ export default function ReportsPage() {
     : (dbData?.students || []).filter(s => s.sheikhId === currentUser?.id || s.sheikh_id === currentUser?.id)
   ).map(safeStudent);
 
+  // ── Day-by-day attendance ─────────────────────────────────────────────────
+  const dateList = (() => {
+    const out = [];
+    const start = new Date(dateFrom);
+    const end = new Date(dateTo);
+    if (isNaN(start) || isNaN(end) || start > end) return out;
+    const cur = new Date(start);
+    let guard = 0;
+    while (cur <= end && guard < 370) {
+      out.push(cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0'));
+      cur.setDate(cur.getDate() + 1);
+      guard++;
+    }
+    return out;
+  })();
+
+  // Best status per student/day (present > late > excused > absent)
+  const STATUS_PRIORITY = { present: 4, late: 3, excused: 2, absent: 1 };
+  const attMap = (() => {
+    const m = {};
+    for (const a of filteredAttendance) {
+      const sid = a.studentId || a.student_id;
+      const key = sid + '|' + a.date;
+      if (!m[key] || (STATUS_PRIORITY[a.status] || 0) > (STATUS_PRIORITY[m[key]] || 0)) m[key] = a.status;
+    }
+    return m;
+  })();
+
+  const statusCode = (st) => {
+    if (!st) return '-';
+    return (lang === 'ar'
+      ? { present: 'ح', late: 'ت', excused: 'ع', absent: 'غ' }
+      : { present: 'P', late: 'L', excused: 'E', absent: 'A' })[st] || '-';
+  };
+  const statusColor = (st) => ({
+    present: '#10B981', late: '#F59E0B', excused: '#3B82F6', absent: '#EF4444',
+  })[st] || 'var(--text-muted)';
+  const dayLabel = (d) => { const dt = new Date(d); return String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0'); };
+
   const handleExport = (reportId, format) => {
     try {
       const L = (ar, en) => (lang === 'ar' ? ar : en);
@@ -55,6 +94,18 @@ export default function ReportsPage() {
       } else if (reportId === 'revision') {
         head = [L('الاسم', 'Name'), L('الآيات المحفوظة', 'Ayahs Memorized'), L('نسبة الحضور', 'Attendance %')];
         body = myStudents.map(s => [s.fullName, s.totalAyahMemorized, `${s.attendancePct}%`]);
+      } else if (reportId === 'daily') {
+        head = [L('الاسم', 'Name'), ...dateList.map(dayLabel), L('حاضر', 'Present'), L('غائب', 'Absent')];
+        body = myStudents.map(s => {
+          let present = 0, absent = 0;
+          const cells = dateList.map(d => {
+            const st = attMap[s.id + '|' + d];
+            if (st === 'present' || st === 'late') present++;
+            else if (st === 'absent') absent++;
+            return statusCode(st);
+          });
+          return [s.fullName, ...cells, present, absent];
+        });
       } else {
         head = [L('الاسم', 'Name'), L('الاسم (إنجليزي)', 'Name (EN)'), L('السورة الحالية', 'Current Surah'), L('الآية', 'Ayah'), L('إجمالي الآيات', 'Total Ayahs'), L('نسبة الحضور', 'Attendance %')];
         body = myStudents.map(s => [s.fullName, s.fullNameEn || '', getSurahName(s.currentSurah, lang), s.currentAyah, s.totalAyahMemorized, `${s.attendancePct}%`]);
@@ -62,6 +113,7 @@ export default function ReportsPage() {
 
       const reportTitles = {
         attendance:    L('تقرير الحضور', 'Attendance Report'),
+        daily:         L('تقرير الحضور اليومي', 'Daily Attendance Report'),
         progress:      L('تقرير التقدم', 'Progress Report'),
         revision:      L('تقرير المراجعة', 'Revision Report'),
         comprehensive: L('تقرير شامل', 'Comprehensive Report'),
@@ -245,6 +297,84 @@ export default function ReportsPage() {
               value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
         </div>
+      </div>
+
+      {/* Day-by-day attendance */}
+      <div className="card" style={{ marginBottom: '1.5rem', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.875rem' }}>
+          <div>
+            <h3 className="text-subtitle font-bold">{lang === 'ar' ? 'الحضور اليومي' : 'Daily Attendance'}</h3>
+            <p className="text-xs text-muted">
+              {lang === 'ar' ? `يوم بيوم خلال النطاق المحدد · ${dateList.length} يوم` : `Day by day over the selected range · ${dateList.length} days`}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-sm" style={{ background: '#ECFDF5', color: '#0F766E', fontWeight: 700 }} onClick={() => handleExport('daily', 'PDF')}>
+              <FileText size={14} /> {t('exportPDF')}
+            </button>
+            <button className="btn btn-sm" style={{ background: '#ECFDF5', color: '#047857', fontWeight: 700 }} onClick={() => handleExport('daily', 'EXCEL')}>
+              <Sheet size={14} /> {lang === 'ar' ? 'إكسل' : 'Excel'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => handleExport('daily', 'CSV')}>
+              <Table size={14} /> {t('exportCSV')}
+            </button>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: '0.875rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          {[['present', lang === 'ar' ? 'حاضر' : 'Present'], ['late', lang === 'ar' ? 'متأخر' : 'Late'], ['excused', lang === 'ar' ? 'معذور' : 'Excused'], ['absent', lang === 'ar' ? 'غائب' : 'Absent']].map(([k, label]) => (
+            <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              <span style={{ width: 18, height: 18, borderRadius: 5, background: statusColor(k), color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.62rem', fontWeight: 700 }}>{statusCode(k)}</span>
+              {label}
+            </span>
+          ))}
+        </div>
+
+        {myStudents.length === 0 || dateList.length === 0 ? (
+          <div className="text-small text-muted" style={{ padding: '1rem 0' }}>{t('noData')}</div>
+        ) : (
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: '0.72rem', minWidth: 'max-content' }}>
+              <thead>
+                <tr>
+                  <th style={{ position: 'sticky', insetInlineStart: 0, background: 'var(--bg-card)', zIndex: 2, padding: '0.4rem 0.6rem', textAlign: 'start', borderBottom: '2px solid var(--border)', minWidth: 120 }}>
+                    {lang === 'ar' ? 'الطالب' : 'Student'}
+                  </th>
+                  {dateList.map(d => (
+                    <th key={d} title={d} style={{ padding: '0.4rem 0.3rem', borderBottom: '2px solid var(--border)', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{dayLabel(d)}</th>
+                  ))}
+                  <th style={{ padding: '0.4rem 0.5rem', borderBottom: '2px solid var(--border)', color: '#10B981' }}>{lang === 'ar' ? 'ح' : 'P'}</th>
+                  <th style={{ padding: '0.4rem 0.5rem', borderBottom: '2px solid var(--border)', color: '#EF4444' }}>{lang === 'ar' ? 'غ' : 'A'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myStudents.map(s => {
+                  let present = 0, absent = 0;
+                  return (
+                    <tr key={s.id}>
+                      <td style={{ position: 'sticky', insetInlineStart: 0, background: 'var(--bg-card)', zIndex: 1, padding: '0.35rem 0.6rem', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{s.fullName}</td>
+                      {dateList.map(d => {
+                        const st = attMap[s.id + '|' + d];
+                        if (st === 'present' || st === 'late') present++;
+                        else if (st === 'absent') absent++;
+                        return (
+                          <td key={d} style={{ textAlign: 'center', padding: '0.25rem', borderBottom: '1px solid var(--border)' }}>
+                            <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 5, fontWeight: 700, color: st ? '#fff' : 'var(--text-muted)', background: st ? statusColor(st) : 'transparent' }}>
+                              {statusCode(st)}
+                            </span>
+                          </td>
+                        );
+                      })}
+                      <td style={{ textAlign: 'center', fontWeight: 700, color: '#10B981', borderBottom: '1px solid var(--border)' }}>{present}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 700, color: '#EF4444', borderBottom: '1px solid var(--border)' }}>{absent}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Report cards */}

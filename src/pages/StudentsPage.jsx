@@ -107,6 +107,75 @@ function StudentFormModal({ student, onClose, onSave }) {
   );
 }
 
+function AttendanceCalendar({ studentId }) {
+  const { lang, dbData } = useApp();
+  const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+
+  const STATUS_PRIORITY = { present: 4, late: 3, excused: 2, absent: 1 };
+  const statusColor = (st) => ({ present: '#10B981', late: '#F59E0B', excused: '#3B82F6', absent: '#EF4444' })[st] || '';
+
+  const map = {};
+  (dbData?.attendance || []).forEach(a => {
+    const sid = a.studentId || a.student_id;
+    if (sid !== studentId) return;
+    const key = a.date;
+    if (!map[key] || (STATUS_PRIORITY[a.status] || 0) > (STATUS_PRIORITY[map[key]] || 0)) map[key] = a.status;
+  });
+
+  const first = new Date(month.y, month.m, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(month.y, month.m + 1, 0).getDate();
+  const monthName = first.toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', { month: 'long', year: 'numeric' });
+  const dows = lang === 'ar' ? ['أحد', 'إثن', 'ثلا', 'أرب', 'خمي', 'جمع', 'سبت'] : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const prev = () => setMonth(p => { const m = p.m - 1; return m < 0 ? { y: p.y - 1, m: 11 } : { y: p.y, m }; });
+  const next = () => setMonth(p => { const m = p.m + 1; return m > 11 ? { y: p.y + 1, m: 0 } : { y: p.y, m }; });
+  const pad = (n) => String(n).padStart(2, '0');
+
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  let present = 0, absent = 0;
+  Object.entries(map).forEach(([date, st]) => {
+    if (!date.startsWith(`${month.y}-${pad(month.m + 1)}`)) return;
+    if (st === 'present' || st === 'late') present++; else if (st === 'absent') absent++;
+  });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+        <div className="text-small font-semibold">📅 {lang === 'ar' ? 'سجل الحضور' : 'Attendance'}
+          <span className="text-xs text-muted" style={{ marginInlineStart: 8 }}>
+            {lang === 'ar' ? `حاضر ${present} · غائب ${absent}` : `P ${present} · A ${absent}`}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={prev}>{lang === 'ar' ? '›' : '‹'}</button>
+          <span className="text-xs" style={{ minWidth: 96, textAlign: 'center' }}>{monthName}</span>
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={next}>{lang === 'ar' ? '‹' : '›'}</button>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+        {dows.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700 }}>{d}</div>)}
+        {cells.map((d, i) => {
+          if (!d) return <div key={'e' + i} />;
+          const date = `${month.y}-${pad(month.m + 1)}-${pad(d)}`;
+          const st = map[date];
+          const color = statusColor(st);
+          return (
+            <div key={date} title={date + (st ? ' · ' + st : '')} style={{
+              aspectRatio: '1', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '0.7rem', fontWeight: 600,
+              background: color || 'var(--bg-input)', color: color ? '#fff' : 'var(--text-muted)',
+              border: '1px solid var(--border)',
+            }}>{d}</div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function StudentProfileModal({ student, onClose }) {
   const { t, lang } = useApp();
   if (!student) return null;
@@ -180,6 +249,9 @@ function StudentProfileModal({ student, onClose }) {
 
           {/* Progress Map (Juz / Hizb / Thumn) */}
           <ProgressMap student={student} title={`🗺️ ${t('juzMap')}`} />
+
+          {/* Day-by-day attendance calendar */}
+          <AttendanceCalendar studentId={student.id} />
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
