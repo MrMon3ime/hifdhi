@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import translations from '../i18n/translations.js';
 import { mockUsers, mockStudents, mockHalaqat, mockAttendance, mockSessions, mockRevisions, mockMatnProgress } from '../data/mockData.js';
-import { getCompletedJuz } from '../data/quranData.js';
+import { getCompletedJuz, getMemorizedIntervals, intervalsCount, furthestMemorized, fromGlobalAyah, getCompletedJuzFromIntervals } from '../data/quranData.js';
 import { supabase } from '../lib/supabase.js';
 
 const AppContext = createContext(null);
@@ -89,18 +89,32 @@ export function AppProvider({ children }) {
       }
 
       const attList = attendance ? transformList(attendance) : [];
+      const sessionList = sessions ? transformList(sessions) : [];
 
       setDbData({
         users:       users ? transformList(users) : mockUsers,
         students:    students
-          ? transformList(students).map(safeStudent).map(st => ({
-              ...st,
-              attendancePct: computeAttendancePct(st.id, attList),
-            }))
+          ? transformList(students).map(safeStudent).map(st => {
+              // Progress is derived from the union of memorized ("new") sessions,
+              // so non-linear memorization (any range, any order) is tracked correctly.
+              const intervals = getMemorizedIntervals(sessionList, st.id);
+              const total = intervalsCount(intervals);
+              const fm = furthestMemorized(intervals);
+              const pos = fm ? fromGlobalAyah(fm) : { surah: 1, ayah: 1 };
+              return {
+                ...st,
+                attendancePct: computeAttendancePct(st.id, attList),
+                memorizedIntervals: intervals,
+                juzCompleted: getCompletedJuzFromIntervals(intervals),
+                totalAyahMemorized: total,
+                currentSurah: pos.surah,
+                currentAyah: pos.ayah,
+              };
+            })
           : mockStudents,
         halaqat:     halaqat ? transformList(halaqat) : mockHalaqat,
         attendance:  attendance ? attList : mockAttendance,
-        sessions:    sessions ? transformList(sessions) : mockSessions,
+        sessions:    sessions ? sessionList : mockSessions,
         revisions:   mockRevisions,
         matnProgress: mockMatnProgress,
         isLoading: false,

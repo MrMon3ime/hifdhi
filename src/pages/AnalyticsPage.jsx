@@ -32,8 +32,11 @@ export default function AnalyticsPage() {
     ? Math.round(myStudents.reduce((sum, s) => sum + (s.attendancePct || 0), 0) / myStudents.length)
     : 0;
 
-  const sessions = dbData?.sessions || [];
-  const attendance = dbData?.attendance || [];
+  // Teacher sees only their own students' data; admin sees everything.
+  const myStudentIds = new Set(myStudents.map(s => s.id));
+  const mine = (r) => myStudentIds.has(r.studentId || r.student_id);
+  const sessions = (dbData?.sessions || []).filter(mine);
+  const attendance = (dbData?.attendance || []).filter(mine);
 
   // Generate dynamic week data from sessions
   const last7Days = Array.from({length: 7}, (_, i) => {

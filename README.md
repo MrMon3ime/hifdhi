@@ -1,16 +1,60 @@
-# React + Vite
+# حِفْظِي — Hifdhi
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+نظام إدارة حلقات تحفيظ القرآن الكريم · Qur'an Memorization Circle Management.
+React + Vite + Supabase, packaged for Android/iOS with Capacitor and installable as a free PWA.
 
-Currently, two official plugins are available:
+## 🌍 Live links (free hosting)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Platform | Link |
+|----------|------|
+| **GitHub Pages** | https://mrmon3ime.github.io/hifdhi/ |
+| **Netlify** | https://hifdhi.netlify.app |
 
-## React Compiler
+> The links go live once each host is connected (see below). iPhone/Android users open a link and
+> **Add to Home Screen** to install حِفْظِي for free — no Apple/Google account needed.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/MrMon3ime/hifdhi)
 
-## Expanding the ESLint configuration
+### Enable GitHub Pages
+1. Push the repo to GitHub, then **Settings → Pages → Source: GitHub Actions**.
+2. Add repo secrets (**Settings → Secrets and variables → Actions**): `VITE_SUPABASE_URL`,
+   `VITE_SUPABASE_PUBLISHABLE_KEY`.
+3. Every push to `main` deploys via `.github/workflows/deploy-pages.yml` →
+   **https://mrmon3ime.github.io/hifdhi/**
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### Enable Netlify
+1. Click the **Deploy to Netlify** button above (or netlify.com → Add new site → import the repo).
+2. Build settings come from `netlify.toml` (`npm run build` → `dist`).
+3. Add the two `VITE_SUPABASE_*` variables under **Site settings → Environment variables**.
+4. Optional: **Site settings → Change site name → `hifdhi`** → **https://hifdhi.netlify.app**
+
+---
+
+## 📱 Install on a phone (free PWA)
+- **iPhone (Safari):** open a link above → **Share → Add to Home Screen**.
+- **Android (Chrome):** open a link → **Install app**. Or share the APK directly.
+
+## 📦 Native apps
+- **Android APK:** `android/app/build/outputs/apk/debug/app-debug.apk` (built and installable now).
+- **iOS:** see [`BITRISE-IOS.md`](BITRISE-IOS.md) (cloud build) or [`IOS-BUILD.md`](IOS-BUILD.md).
+  Native iOS distribution requires a paid Apple Developer account ($99/yr) — the **free** iOS route is
+  the PWA above. Full details in [`FREE-DEPLOY.md`](FREE-DEPLOY.md).
+
+## 📖 User guides
+Bilingual PDFs to send to users: [`user-guide/hifdhi-guide-ar.pdf`](user-guide/hifdhi-guide-ar.pdf) ·
+[`user-guide/hifdhi-guide-en.pdf`](user-guide/hifdhi-guide-en.pdf)
+
+---
+
+## 🛠️ Development
+```bash
+npm install
+# create .env.local with:
+#   VITE_SUPABASE_URL=...
+#   VITE_SUPABASE_PUBLISHABLE_KEY=...
+npm run dev      # start dev server
+npm run build    # production build → dist/
+npx cap sync     # sync web build into android/ and ios/
+```
+
+> Keep **Row Level Security** enabled on Supabase tables — the publishable key ships in every web/PWA build.

@@ -36,12 +36,11 @@ export default function AttendancePage() {
     fullNameEn: s.fullNameEn || '',
   });
 
-  // All active students can attend any halqa
+  // A teacher sees only their own active students; the admin sees all.
   const allActiveStudents = (dbData?.students || [])
-    .filter(s => s.status === 'active')
+    .filter(s => s.status === 'active' && (isAdmin || s.sheikhId === currentUser?.id))
     .map(safeStudent);
 
-  // For attendance, show all active students (any student can attend any halqa)
   const halaqaStudents = allActiveStudents;
 
   const [attendance, setAttendance] = useState({});

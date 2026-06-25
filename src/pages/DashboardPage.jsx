@@ -74,9 +74,20 @@ export default function DashboardPage() {
   const halaqaOf = (a) => a.halaqaId || a.halaqa_id || '';
   const inSelectedHalaqa = (a) => selectedHalaqa === 'all' || halaqaOf(a) === selectedHalaqa;
 
+  // A teacher only sees their own students' data; the admin sees everything.
+  const myStudentIds = new Set(myStudents.map(s => s.id));
+  const studentId = (r) => r.studentId || r.student_id;
+  const mine = (r) => myStudentIds.has(studentId(r));
+
+  // Verses memorized in a session — ayah_count is not stored, so derive it from
+  // the range. Sessions are camelCased (fromSurah…) with snake-case fallback.
+  const sessionVerses = (s) => s.ayahCount || s.ayah_count || countAyahsBetween(
+    s.fromSurah || s.from_surah, s.fromAyah || s.from_ayah,
+    s.toSurah || s.to_surah, s.toAyah || s.to_ayah,
+  ) || 0;
+
   const today = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })();
-  const todayAtt = (dbData?.attendance || []).filter(a => a.date === today && inSelectedHalaqa(a));
-  const studentId = (a) => a.studentId || a.student_id;
+  const todayAtt = (dbData?.attendance || []).filter(a => mine(a) && a.date === today && inSelectedHalaqa(a));
   const presentIds = new Set(todayAtt.filter(a => a.status === 'present' || a.status === 'late').map(studentId));
   const presentCount = presentIds.size;
 
@@ -91,18 +102,13 @@ export default function DashboardPage() {
     attRate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : 0;
   }
 
-  const todaySessions = (dbData?.sessions || []).filter(s => s.date === today);
-  const todayVerses = todaySessions.reduce((sum, s) => {
-    let count = s.ayah_count || s.ayahCount;
-    if (!count && s.from_surah && s.to_surah) {
-      count = countAyahsBetween(s.from_surah, s.from_ayah, s.to_surah, s.to_ayah);
-    }
-    return sum + (count || 0);
-  }, 0);
+  const myStudentSessions = (dbData?.sessions || []).filter(mine);
+  const todaySessions = myStudentSessions.filter(s => s.date === today);
+  const todayVerses = todaySessions.reduce((sum, s) => sum + sessionVerses(s), 0);
 
-  // Real chart data computed from actual sessions
-  const allSessions = dbData?.sessions || [];
-  const allAttendance = (dbData?.attendance || []).filter(inSelectedHalaqa);
+  // Charts use the same scoped data
+  const allSessions = myStudentSessions;
+  const allAttendance = (dbData?.attendance || []).filter(a => mine(a) && inSelectedHalaqa(a));
 
   const weekData = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
@@ -112,13 +118,7 @@ export default function DashboardPage() {
       const daySessions = allSessions.filter(s => s.date === dateStr);
       return {
         name: d.toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' }),
-        verses: daySessions.reduce((sum, s) => {
-          let count = s.ayah_count || s.ayahCount;
-          if (!count && s.from_surah && s.to_surah) {
-            count = countAyahsBetween(s.from_surah, s.from_ayah, s.to_surah, s.to_ayah);
-          }
-          return sum + (count || 0);
-        }, 0),
+        verses: daySessions.reduce((sum, s) => sum + sessionVerses(s), 0),
       };
     });
   }, [allSessions, lang]);
@@ -155,7 +155,7 @@ export default function DashboardPage() {
     .sort((a, b) => b.totalAyahMemorized - a.totalAyahMemorized)
     .slice(0, 5);
 
-  const revisionSessions = (dbData?.sessions || []).filter(s => s.type === 'muraja3ah' || s.type === 'revision');
+  const revisionSessions = myStudentSessions.filter(s => s.type === 'muraja3ah' || s.type === 'revision');
   const pendingRevisions = revisionSessions.filter(r => r.status === 'pending').length;
   const missedRevisions = revisionSessions.filter(r => r.status === 'missed').length;
 

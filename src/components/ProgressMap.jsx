@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { getDivisionMap, DIVISION_CONFIG } from '../data/quranData.js';
+import { getDivisionMapForIntervals, getMemorizedIntervals, DIVISION_CONFIG } from '../data/quranData.js';
 import { Map } from 'lucide-react';
 
 const TYPES = [
@@ -11,11 +11,14 @@ const TYPES = [
 
 // Reusable Quran progress map with a Juz / Hizb / Thumn selector.
 export default function ProgressMap({ student, title }) {
-  const { lang } = useApp();
+  const { lang, dbData } = useApp();
   const [type, setType] = useState('juz');
 
   const cfg = TYPES.find(c => c.key === type);
-  const cells = getDivisionMap(type, student?.currentSurah ?? 1, student?.currentAyah ?? 1);
+  // Use the student's memorized ranges (handles non-linear memorization).
+  const intervals = student?.memorizedIntervals
+    || getMemorizedIntervals(dbData?.sessions || [], student?.id);
+  const cells = getDivisionMapForIntervals(type, intervals);
   const total = DIVISION_CONFIG[type].total;
   const completedCount = cells.filter(c => c.completed).length;
   const letter = lang === 'ar' ? cfg.letterAr : cfg.letterEn;
@@ -74,8 +77,8 @@ export default function ProgressMap({ student, title }) {
         {cells.map(cell => (
           <div
             key={cell.n}
-            className={`juz-cell ${cell.completed ? 'completed' : 'empty'}`}
-            title={`${lang === 'ar' ? cfg.ar : cfg.en} ${cell.n}${type !== 'juz' ? ` · ${lang === 'ar' ? 'جزء' : 'Juz'} ${cell.juz}` : ''}${cell.completed ? ' ✓' : ''}`}
+            className={`juz-cell ${cell.completed ? 'completed' : cell.partial ? 'partial' : 'empty'}`}
+            title={`${lang === 'ar' ? cfg.ar : cfg.en} ${cell.n}${type !== 'juz' ? ` · ${lang === 'ar' ? 'جزء' : 'Juz'} ${cell.juz}` : ''}${cell.completed ? ' ✓' : cell.partial ? (lang === 'ar' ? ' (جزئي)' : ' (partial)') : ''}`}
           >
             <span style={{ fontSize: type === 'thumn' ? '0.5rem' : '0.58rem', opacity: 0.85 }}>{letter}</span>
             <span style={{ fontSize: type === 'thumn' ? '0.62rem' : '0.75rem', fontWeight: 700 }}>{cell.n}</span>
@@ -88,6 +91,10 @@ export default function ProgressMap({ student, title }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           <div style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--emerald)' }} />
           <span className="text-xs text-muted">{lang === 'ar' ? 'مكتمل' : 'Completed'}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+          <div style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--gold)' }} />
+          <span className="text-xs text-muted">{lang === 'ar' ? 'جزئي' : 'Partial'}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           <div style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--bg-input)', border: '1px solid var(--border)' }} />

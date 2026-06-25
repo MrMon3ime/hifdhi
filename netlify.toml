@@ -1,0 +1,16 @@
+# Netlify config — free hosting for the حِفْظِي PWA
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Single-page app: serve index.html for any path
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in:
+# Netlify → Site settings → Environment variables

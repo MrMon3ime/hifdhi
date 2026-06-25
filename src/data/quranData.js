@@ -247,6 +247,98 @@ export const getDivisionMap = (type, currentSurah = 1, currentAyah = 1) => {
   }));
 };
 
+// ── Memorized ranges (supports non-linear memorization) ─────────────────────
+// Memorization need not start at Al-Fatihah; a student may memorize any range.
+// We track the union of memorized ranges (from "new" sessions) as merged global
+// ayah intervals [startGlobal, endGlobal].
+
+// Convert a 1-based global ayah index back to { surah, ayah }.
+export const fromGlobalAyah = (global) => {
+  let g = Math.max(1, Math.min(TOTAL_AYAHS, Math.round(global)));
+  for (const s of SURAHS) {
+    if (g <= s.ayahs) return { surah: s.number, ayah: g };
+    g -= s.ayahs;
+  }
+  return { surah: 114, ayah: 6 };
+};
+
+// Merge a list of [start, end] ranges into sorted, non-overlapping intervals.
+export const mergeIntervals = (ranges) => {
+  const norm = (ranges || [])
+    .map(([a, b]) => (a <= b ? [a, b] : [b, a]))
+    .filter(([a, b]) => a >= 1 && b >= 1)
+    .sort((x, y) => x[0] - y[0]);
+  const out = [];
+  for (const [s, e] of norm) {
+    const last = out[out.length - 1];
+    if (last && s <= last[1] + 1) last[1] = Math.max(last[1], e);
+    else out.push([s, e]);
+  }
+  return out;
+};
+
+// Build merged memorized intervals from a student's "new" sessions.
+export const getMemorizedIntervals = (sessions, studentId, excludeId = null) => {
+  const ranges = (sessions || [])
+    .filter(s => s.type === 'new'
+      && (s.studentId || s.student_id) === studentId
+      && s.id !== excludeId)
+    .map(s => [
+      toGlobalAyah(s.fromSurah || s.from_surah, s.fromAyah || s.from_ayah),
+      toGlobalAyah(s.toSurah || s.to_surah, s.toAyah || s.to_ayah),
+    ]);
+  return mergeIntervals(ranges);
+};
+
+export const intervalsCount = (intervals) =>
+  (intervals || []).reduce((sum, [s, e]) => sum + (e - s + 1), 0);
+
+// Does [s, e] overlap any memorized interval?
+export const rangeOverlaps = (s, e, intervals) =>
+  (intervals || []).some(([a, b]) => s <= b && e >= a);
+
+// Is [s, e] fully contained within the memorized set?
+export const rangeWithin = (s, e, intervals) =>
+  (intervals || []).some(([a, b]) => a <= s && b >= e);
+
+export const furthestMemorized = (intervals) =>
+  (intervals || []).length ? Math.max(...intervals.map(([, e]) => e)) : 0;
+
+// Per-division ranges [{ n, juz, start, end }] (global ayah indices).
+const buildDivisionRanges = (perJuz) => {
+  const ranges = [];
+  let prevEnd = 0;
+  for (let j = 0; j < JUZ_BOUNDARIES.length; j++) {
+    const juzEnd = toGlobalAyah(JUZ_BOUNDARIES[j].surah, JUZ_BOUNDARIES[j].ayah);
+    const startG0 = prevEnd + 1;
+    const span = juzEnd - startG0 + 1;
+    let prevCut = startG0 - 1;
+    for (let d = 1; d <= perJuz; d++) {
+      const cut = d === perJuz ? juzEnd : startG0 - 1 + Math.round((span * d) / perJuz);
+      ranges.push({ start: prevCut + 1, end: cut, juz: j + 1 });
+      prevCut = cut;
+    }
+    prevEnd = juzEnd;
+  }
+  return ranges;
+};
+
+const _rangesCache = {};
+// Division map based on actual memorized intervals: green when fully memorized,
+// gold ("partial") when only part of the division is memorized.
+export const getDivisionMapForIntervals = (type, intervals) => {
+  const cfg = DIVISION_CONFIG[type] || DIVISION_CONFIG.juz;
+  if (!_rangesCache[type]) _rangesCache[type] = buildDivisionRanges(cfg.perJuz);
+  return _rangesCache[type].map((r, i) => {
+    const overlaps = rangeOverlaps(r.start, r.end, intervals);
+    const full = rangeWithin(r.start, r.end, intervals);
+    return { n: i + 1, juz: r.juz, completed: full, partial: overlaps && !full };
+  });
+};
+
+export const getCompletedJuzFromIntervals = (intervals) =>
+  getDivisionMapForIntervals('juz', intervals).filter(c => c.completed).map(c => c.n);
+
 export const MATN_TYPES = [
   // المستوى الأول
   { key: 'bayquniyyah',       nameAr: 'نظم البيقونية',                nameEn: 'Al-Bayquniyyah',          total: 34 },

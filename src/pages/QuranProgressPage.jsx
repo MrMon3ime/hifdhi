@@ -1,22 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { SURAHS, getSurahName, countAyahsBetween } from '../data/quranData.js';
+import {
+  SURAHS, getSurahName, countAyahsBetween,
+  toGlobalAyah, fromGlobalAyah, mergeIntervals, intervalsCount, furthestMemorized,
+  rangeOverlaps, rangeWithin, getMemorizedIntervals,
+} from '../data/quranData.js';
 import ProgressMap from '../components/ProgressMap.jsx';
 import { Plus, X, BookOpen, RefreshCw, Info, MapPin, Trash2, Edit3 } from 'lucide-react';
 
 /* ── helpers ──────────────────────────────────────────────── */
 const totalQuranAyahs = 6236;
-
-function getNextPosition(toSurah, toAyah) {
-  const surah = SURAHS.find(s => s.number === toSurah);
-  if (!surah) return { surah: toSurah, ayah: toAyah };
-  if (toAyah >= surah.ayahs) {
-    const next = SURAHS.find(s => s.number === toSurah + 1);
-    return next ? { surah: next.number, ayah: 1 } : { surah: toSurah, ayah: surah.ayahs };
-  }
-  return { surah: toSurah, ayah: toAyah + 1 };
-}
 
 /* ── StarRating ───────────────────────────────────────────── */
 function StarRating({ value, onChange }) {
@@ -40,7 +34,7 @@ function StarRating({ value, onChange }) {
 }
 
 /* ── AddSessionModal ──────────────────────────────────────── */
-function AddSessionModal({ student, editSession, onClose, onSave }) {
+function AddSessionModal({ student, editSession, memorizedIntervals = [], onClose, onSave }) {
   const { t, lang } = useApp();
   const today = new Date().toISOString().split('T')[0];
 
@@ -59,21 +53,19 @@ function AddSessionModal({ student, editSession, onClose, onSave }) {
         notes: editSession.notes || '',
       };
     }
+    // Default a NEW session to the next un-memorized ayah (just a convenience —
+    // the teacher can freely pick any surah/ayah, no forced start from Al-Fatihah).
+    const fm = furthestMemorized(memorizedIntervals);
+    const start = fm && fm < totalQuranAyahs ? fromGlobalAyah(fm + 1) : { surah: 1, ayah: 1 };
     return {
-      fromSurah: student?.currentSurah || 1,
-      fromAyah: student?.currentAyah || 1,
-      toSurah: student?.currentSurah || 1,
-      toAyah: student?.currentAyah || 1,
+      fromSurah: start.surah, fromAyah: start.ayah,
+      toSurah: start.surah, toAyah: start.ayah,
       date: today, type: 'new', rating: 0, notes: '',
     };
   });
 
   const handle = (k, v) => setForm(p => {
     const next = { ...p, [k]: v };
-    if (k === 'type' && v === 'new') {
-      next.fromSurah = student?.currentSurah || 1;
-      next.fromAyah = student?.currentAyah || 1;
-    }
     // When the surah changes, keep the ayah within that surah's range
     if (k === 'fromSurah') {
       const s = SURAHS.find(x => x.number === Number(v));
@@ -101,18 +93,20 @@ function AddSessionModal({ student, editSession, onClose, onSave }) {
   const toSurahData = SURAHS.find(s => s.number === Number(form.toSurah));
   const ayahCount = countAyahsBetween(Number(form.fromSurah), Number(form.fromAyah), Number(form.toSurah), Number(form.toAyah));
 
-  let isExceedingCurrent = false;
-  if (form.type === 'muraja3ah') {
-    const currentSurah = student?.currentSurah || 1;
-    const currentAyah = student?.currentAyah || 1;
-    isExceedingCurrent = Number(form.toSurah) > currentSurah || 
-                         (Number(form.toSurah) === currentSurah && Number(form.toAyah) > currentAyah);
+  const fromG = toGlobalAyah(Number(form.fromSurah), Number(form.fromAyah));
+  const toG = toGlobalAyah(Number(form.toSurah), Number(form.toAyah));
+  const isValidRange = toG >= fromG;
+
+  // NEW: range must not overlap already-memorized ayahs.
+  // MURAJA'AH: range must be fully inside the memorized set.
+  let conflict = null;
+  if (isValidRange && form.type === 'new' && rangeOverlaps(fromG, toG, memorizedIntervals)) {
+    conflict = 'overlap';
+  } else if (isValidRange && form.type === 'muraja3ah' && !rangeWithin(fromG, toG, memorizedIntervals)) {
+    conflict = 'notMemorized';
   }
 
-  const isValidRange = Number(form.toSurah) > Number(form.fromSurah) ||
-    (Number(form.toSurah) === Number(form.fromSurah) && Number(form.toAyah) >= Number(form.fromAyah));
-
-  const isValid = isValidRange && !isExceedingCurrent;
+  const isValid = isValidRange && !conflict;
 
   const submit = (e) => {
     e.preventDefault();
@@ -155,7 +149,7 @@ function AddSessionModal({ student, editSession, onClose, onSave }) {
               borderRadius: 10, padding: '0.75rem', fontSize: '0.82rem', color: 'var(--emerald)',
             }}>
               <Info size={14} style={{ display: 'inline', verticalAlign: 'text-bottom' }} />
-              {' '}{lang === 'ar' ? 'الموقع الحالي:' : 'Current position:'}
+              {' '}{lang === 'ar' ? 'أبعد آية محفوظة:' : 'Memorized up to:'}
               {' '}<strong>{getSurahName(student?.currentSurah, lang)} — {lang === 'ar' ? 'آية' : 'Ayah'} {student?.currentAyah}</strong>
             </div>
 
@@ -165,7 +159,7 @@ function AddSessionModal({ student, editSession, onClose, onSave }) {
               <div className="grid-2" style={{ gap: '0.75rem' }}>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '0.72rem' }}>{t('surah')}</label>
-                  <select className="select" value={form.fromSurah} onChange={e => handle('fromSurah', Number(e.target.value))} disabled={form.type === 'new'}>
+                  <select className="select" value={form.fromSurah} onChange={e => handle('fromSurah', Number(e.target.value))}>
                     {SURAHS.map(s => <option key={s.number} value={s.number}>{s.number}. {lang === 'ar' ? s.nameAr : s.nameEn} ({s.ayahs})</option>)}
                   </select>
                 </div>
@@ -174,8 +168,7 @@ function AddSessionModal({ student, editSession, onClose, onSave }) {
                   <input type="number" className="input" min={1} max={fromSurahData?.ayahs || 7}
                     value={form.fromAyah}
                     onChange={e => handle('fromAyah', e.target.value)}
-                    onBlur={() => clampAyah('fromAyah', 'fromSurah')}
-                    disabled={form.type === 'new'} />
+                    onBlur={() => clampAyah('fromAyah', 'fromSurah')} />
                 </div>
               </div>
             </div>
@@ -210,9 +203,11 @@ function AddSessionModal({ student, editSession, onClose, onSave }) {
             }}>
               {isValid
                 ? `${lang === 'ar' ? 'عدد الآيات:' : 'Ayah count:'} ${ayahCount}`
-                : isExceedingCurrent 
-                  ? (lang === 'ar' ? 'لا يمكنك مراجعة آيات لم يحفظها الطالب بعد' : 'Cannot revise ayahs the student has not memorized yet')
-                  : (lang === 'ar' ? 'نطاق غير صالح — يجب أن تكون "إلى" بعد "من"' : 'Invalid range — "To" must be after "From"')}
+                : conflict === 'overlap'
+                  ? (lang === 'ar' ? 'بعض هذه الآيات محفوظة بالفعل — اخترها في المراجعة' : 'Some of these ayahs are already memorized — use Revision')
+                  : conflict === 'notMemorized'
+                    ? (lang === 'ar' ? 'لا يمكنك مراجعة آيات لم تُحفظ بعد' : 'You can only revise ayahs already memorized')
+                    : (lang === 'ar' ? 'نطاق غير صالح — يجب أن تكون "إلى" بعد "من"' : 'Invalid range — "To" must be after "From"')}
             </div>
 
             <div className="input-group">
@@ -374,27 +369,18 @@ export default function QuranProgressPage() {
         .eq('student_id', studentId)
         .eq('type', 'new');
 
-      if (!newSessions || newSessions.length === 0) {
-        await supabase.from('students').update({
-          current_surah: 1, current_ayah: 1, total_ayah_memorized: 0, juz_completed: []
-        }).eq('id', studentId);
-        return;
-      }
+      // Total = union of memorized ranges (supports non-linear memorization).
+      const intervals = mergeIntervals((newSessions || []).map(s => [
+        toGlobalAyah(s.from_surah, s.from_ayah),
+        toGlobalAyah(s.to_surah, s.to_ayah),
+      ]));
+      const total = intervalsCount(intervals);
+      const fm = furthestMemorized(intervals);
+      const pos = fm ? fromGlobalAyah(fm) : { surah: 1, ayah: 1 };
 
-      let total = 0;
-      const sorted = [...newSessions].sort((a, b) => new Date(a.date) - new Date(b.date));
-      
-      sorted.forEach(s => {
-        total += countAyahsBetween(s.from_surah, s.from_ayah, s.to_surah, s.to_ayah);
-      });
-
-      const last = sorted[sorted.length - 1];
-      const lastPos = getNextPosition(last.to_surah, last.to_ayah);
-
-      // Completed juz is derived on the client from the position (no DB column).
       await supabase.from('students').update({
-        current_surah: lastPos.surah,
-        current_ayah: lastPos.ayah,
+        current_surah: pos.surah,
+        current_ayah: pos.ayah,
         total_ayah_memorized: total,
       }).eq('id', studentId);
     } catch (err) {
@@ -486,19 +472,25 @@ export default function QuranProgressPage() {
             {lang === 'ar' ? 'متابعة حفظ الطلاب وتسجيل الجلسات' : 'Track student memorization and log sessions'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: '1 1 auto', justifyContent: 'flex-end' }}>
           {isAdmin && (
             <button
               className="btn btn-secondary"
               onClick={resetAllProgress}
               title={lang === 'ar' ? 'إعادة تعيين الكل إلى 0' : 'Reset all to 0'}
-              style={{ color: 'var(--error)', borderColor: 'var(--error)' }}
+              style={{ color: 'var(--error)', borderColor: 'var(--error)', flex: '1 1 auto', justifyContent: 'center', minWidth: 140 }}
             >
               <RefreshCw size={14} />
               {lang === 'ar' ? 'إعادة تعيين الكل' : 'Reset All'}
             </button>
           )}
-          <button className="btn btn-primary" onClick={() => setShowModal(true)} disabled={!selectedStudent} id="btn-record-session">
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowModal(true)}
+            disabled={!selectedStudent}
+            id="btn-record-session"
+            style={{ flex: '1 1 auto', justifyContent: 'center', minWidth: 160 }}
+          >
             <Plus size={16} /> {t('recordNewSession')}
           </button>
         </div>
@@ -609,6 +601,7 @@ export default function QuranProgressPage() {
         <AddSessionModal
           student={selectedStudent}
           editSession={editingSession}
+          memorizedIntervals={getMemorizedIntervals(sessions, selectedStudent?.id, editingSession?.id)}
           onClose={() => { setShowModal(false); setEditingSession(null); }}
           onSave={handleSaveSession}
         />
