@@ -122,11 +122,155 @@ export const getSurahName = (number, lang = 'ar') => {
   return lang === 'ar' ? surah.nameAr : surah.nameEn;
 };
 
+export function countAyahsBetween(fromSurah, fromAyah, toSurah, toAyah) {
+  if (fromSurah === toSurah) return Math.max(0, toAyah - fromAyah + 1);
+  let count = 0;
+  const fromS = SURAHS.find(s => s.number === fromSurah);
+  if (fromS) count += fromS.ayahs - fromAyah + 1;
+  for (let i = fromSurah + 1; i < toSurah; i++) {
+    const s = SURAHS.find(x => x.number === i);
+    if (s) count += s.ayahs;
+  }
+  count += toAyah;
+  return Math.max(0, count);
+}
+
+// Precise ending boundaries for all 30 Juz (Surah, Ayah)
+export const JUZ_BOUNDARIES = [
+  { juz: 1,  surah: 2,   ayah: 141 },
+  { juz: 2,  surah: 2,   ayah: 252 },
+  { juz: 3,  surah: 3,   ayah: 92  },
+  { juz: 4,  surah: 4,   ayah: 23  },
+  { juz: 5,  surah: 4,   ayah: 147 },
+  { juz: 6,  surah: 5,   ayah: 81  },
+  { juz: 7,  surah: 6,   ayah: 110 },
+  { juz: 8,  surah: 7,   ayah: 87  },
+  { juz: 9,  surah: 8,   ayah: 40  },
+  { juz: 10, surah: 9,   ayah: 92  },
+  { juz: 11, surah: 11,  ayah: 5   },
+  { juz: 12, surah: 12,  ayah: 52  },
+  { juz: 13, surah: 14,  ayah: 52  },
+  { juz: 14, surah: 16,  ayah: 128 },
+  { juz: 15, surah: 18,  ayah: 74  },
+  { juz: 16, surah: 20,  ayah: 135 },
+  { juz: 17, surah: 22,  ayah: 78  },
+  { juz: 18, surah: 25,  ayah: 20  },
+  { juz: 19, surah: 27,  ayah: 55  },
+  { juz: 20, surah: 29,  ayah: 45  },
+  { juz: 21, surah: 33,  ayah: 30  },
+  { juz: 22, surah: 36,  ayah: 27  },
+  { juz: 23, surah: 39,  ayah: 31  },
+  { juz: 24, surah: 41,  ayah: 46  },
+  { juz: 25, surah: 45,  ayah: 37  },
+  { juz: 26, surah: 51,  ayah: 30  },
+  { juz: 27, surah: 57,  ayah: 29  },
+  { juz: 28, surah: 66,  ayah: 12  },
+  { juz: 29, surah: 77,  ayah: 50  },
+  { juz: 30, surah: 114, ayah: 6   }
+];
+
+export function getCompletedJuz(currentSurah, currentAyah) {
+  const completed = [];
+  for (const b of JUZ_BOUNDARIES) {
+    if (currentSurah > b.surah || (currentSurah === b.surah && currentAyah > b.ayah)) {
+      completed.push(b.juz);
+    } else {
+      break; // Since boundaries are ordered, we can stop
+    }
+  }
+  return completed;
+}
+
+// ── Quran division maps: Juz / Hizb / Thumn ─────────────────────────────────
+// The Quran (Maghribi division) splits into 30 أجزاء → 60 أحزاب (2 per juz)
+// → 480 أثمان (8 per hizb, i.e. 16 per juz). Juz boundaries are exact; hizb and
+// thumn are computed by evenly subdividing each juz by ayah count.
+export const TOTAL_AYAHS = 6236;
+
+const SURAH_OFFSETS = (() => {
+  const offsets = {};
+  let cumulative = 0;
+  for (const s of SURAHS) {
+    offsets[s.number] = cumulative;
+    cumulative += s.ayahs;
+  }
+  return offsets;
+})();
+
+// Convert a (surah, ayah) position to a 1-based global ayah index (1..6236).
+export const toGlobalAyah = (surah, ayah) => {
+  const offset = SURAH_OFFSETS[surah] ?? 0;
+  return offset + Math.max(1, Number(ayah) || 1);
+};
+
+export const DIVISION_CONFIG = {
+  juz:   { perJuz: 1,  total: 30  },
+  hizb:  { perJuz: 2,  total: 60  },
+  thumn: { perJuz: 16, total: 480 },
+};
+
+const buildDivisionEnds = (perJuz) => {
+  const ends = [];
+  let prevEnd = 0;
+  for (let j = 0; j < JUZ_BOUNDARIES.length; j++) {
+    const b = JUZ_BOUNDARIES[j];
+    const juzEnd = toGlobalAyah(b.surah, b.ayah);
+    const startG = prevEnd + 1;
+    const span = juzEnd - startG + 1;
+    for (let d = 1; d <= perJuz; d++) {
+      const end = d === perJuz ? juzEnd : startG - 1 + Math.round((span * d) / perJuz);
+      ends.push({ end, juz: j + 1 });
+    }
+    prevEnd = juzEnd;
+  }
+  return ends;
+};
+
+const _endsCache = {};
+const getDivisionEnds = (type) => {
+  if (!_endsCache[type]) {
+    const cfg = DIVISION_CONFIG[type] || DIVISION_CONFIG.juz;
+    _endsCache[type] = buildDivisionEnds(cfg.perJuz);
+  }
+  return _endsCache[type];
+};
+
+// Returns [{ n, juz, completed }] for a division type, given the student's
+// current (next-to-memorize) position. A division is "completed" once the
+// student has memorized past its final ayah.
+export const getDivisionMap = (type, currentSurah = 1, currentAyah = 1) => {
+  const globalCurrent = toGlobalAyah(currentSurah, currentAyah);
+  return getDivisionEnds(type).map((e, i) => ({
+    n: i + 1,
+    juz: e.juz,
+    completed: e.end < globalCurrent,
+  }));
+};
+
 export const MATN_TYPES = [
-  { key: 'ajurrumiyyah', nameAr: 'الآجرومية',         nameEn: 'Al-Ajurrumiyyah',      total: 30 },
-  { key: 'tuhfat',       nameAr: 'تحفة الأطفال',      nameEn: 'Tuhfat Al-Atfal',      total: 61 },
-  { key: 'bayquniyyah',  nameAr: 'البيقونية',          nameEn: 'Al-Bayquniyyah',       total: 34 },
-  { key: 'usul',         nameAr: 'الأصول الثلاثة',    nameEn: 'Al-Usul Ath-Thalatha', total: 20 },
-  { key: 'riyad',        nameAr: 'رياض الصالحين',     nameEn: 'Riyad As-Salihin',     total: 372},
-  { key: 'other',        nameAr: 'أخرى',              nameEn: 'Other',                total: 100},
+  // المستوى الأول
+  { key: 'bayquniyyah',       nameAr: 'نظم البيقونية',                nameEn: 'Al-Bayquniyyah',          total: 34 },
+  { key: 'adab_tilawah',      nameAr: 'نظم آداب التلاوة',             nameEn: 'Adab At-Tilawah',         total: 100 },
+  { key: 'jazariyyah',        nameAr: 'متن الجزرية',                  nameEn: 'Al-Jazariyyah',           total: 109 },
+  { key: 'urjuzah_miiyyah',   nameAr: 'متن الأرجوزة الميئية',         nameEn: 'Al-Urjuzah Al-Miiyyah',   total: 100 },
+  { key: 'arbaeen_nawawiyyah',nameAr: 'متن الأربعون النووية',         nameEn: 'Al-Arbaeen An-Nawawiyyah',total: 42 },
+  { key: 'ajurrumiyyah',      nameAr: 'نظم الآجرومية',                nameEn: 'Al-Ajurrumiyyah',         total: 154 },
+
+  // المستوى الثاني
+  { key: 'ibn_ashir',         nameAr: 'متن ابن عاشر',                 nameEn: 'Ibn Ashir',               total: 314 },
+  { key: 'ibn_abi_qaff',      nameAr: 'نظم ابن أبي قف',               nameEn: 'Ibn Abi Qaff',            total: 100 },
+  { key: 'durar_lawami',      nameAr: 'نظم الدرر اللوامع',            nameEn: 'Ad-Durar Al-Lawami',      total: 274 },
+  { key: 'umdat_ahkam',       nameAr: 'عمدة الأحكام',                 nameEn: 'Umdat Al-Ahkam',          total: 430 },
+  { key: 'nasihat_hammad',    nameAr: 'نظم نصيحة حماد ابن آلمين',      nameEn: 'Nasihat Hammad',          total: 100 },
+  { key: 'alfiyyat_ibn_malik',nameAr: 'ألفية ابن مالك',               nameEn: 'Alfiyyat Ibn Malik',      total: 1002 },
+
+  // المستوى الثالث
+  { key: 'lamiyyat_afal',     nameAr: 'لامية الأفعال',                nameEn: 'Lamiyyat Al-Afal',        total: 114 },
+  { key: 'mutahharat_qulub',  nameAr: 'مطهرة القلوب',                 nameEn: 'Mutahharat Al-Qulub',     total: 100 },
+  { key: 'shatibiyyah',       nameAr: 'ألفية الشاطبي',                nameEn: 'Ash-Shatibiyyah',         total: 1173 },
+  { key: 'ashal_masalik',     nameAr: 'أسهل المسالك',                 nameEn: 'Ashal Al-Masalik',        total: 1000 },
+  { key: 'murtaqa_wusul',     nameAr: 'مرتقى الوصول إلى علم الأصول',  nameEn: 'Murtaqa Al-Wusul',        total: 100 },
+  { key: 'bulugh_maram',      nameAr: 'بلوغ المرام',                  nameEn: 'Bulugh Al-Maram',         total: 1596 },
+  
+  { key: 'other',             nameAr: 'أخرى',                         nameEn: 'Other',                   total: 100 }
 ];

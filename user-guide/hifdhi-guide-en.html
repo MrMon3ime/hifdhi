@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Hifdhi User Guide</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #0F172A; line-height: 1.7; font-size: 13px; }
+  h1, h2, h3 { color: #0F766E; }
+  .cover { text-align: center; padding: 60px 0 30px; }
+  .cover .logo { width: 96px; height: 96px; border-radius: 24px; background: linear-gradient(135deg,#0F766E,#115E59); color: #D4AF37; display: inline-flex; align-items: center; justify-content: center; font-size: 48px; margin-bottom: 18px; }
+  .cover h1 { font-size: 40px; margin: 6px 0; letter-spacing: -1px; }
+  .cover p { color: #475569; font-size: 16px; }
+  .badge { display: inline-block; background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; border-radius: 999px; padding: 4px 14px; font-size: 12px; font-weight: 700; margin-top: 10px; }
+  .section { margin-top: 26px; page-break-inside: avoid; }
+  .section h2 { font-size: 20px; border-bottom: 3px solid #0F766E; padding-bottom: 6px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section h2 .n { background: #0F766E; color: #fff; width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+  ol, ul { padding-left: 22px; margin: 6px 0; }
+  li { margin: 4px 0; }
+  .tip { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px; padding: 8px 12px; margin: 10px 0; font-size: 12.5px; }
+  .tip b { color: #92400E; }
+  .role { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 8px 12px; margin: 10px 0; font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid #E2E8F0; padding: 7px 10px; text-align: left; font-size: 12.5px; }
+  th { background: #0F766E; color: #fff; }
+  tr:nth-child(even) td { background: #F8FAFC; }
+  .toc { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 20px; }
+  .toc ol { columns: 2; }
+  .foot { margin-top: 40px; text-align: center; color: #94A3B8; font-size: 11px; border-top: 1px solid #E2E8F0; padding-top: 10px; }
+  .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">☾</div>
+  <h1>Hifdhi</h1>
+  <p>Qur'an Memorization Circle Management System</p>
+  <div class="badge">User Guide — Version 1.0</div>
+</div>
+
+<div class="section toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>Introduction &amp; Roles</li>
+    <li>Signing In</li>
+    <li>Dashboard</li>
+    <li>Students</li>
+    <li>Attendance</li>
+    <li>Qur'an Progress &amp; Sessions</li>
+    <li>Progress Map (Juz / Hizb / Thumn)</li>
+    <li>Muraja'ah (Revision)</li>
+    <li>Matn (Texts)</li>
+    <li>Analytics</li>
+    <li>Reports &amp; Export</li>
+    <li>Halaqat (Circles)</li>
+    <li>Teachers &amp; Accounts</li>
+    <li>Settings</li>
+    <li>FAQ</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2><span class="n">1</span> Introduction &amp; Roles</h2>
+  <p><b>Hifdhi</b> helps teachers and administrators run Qur'an memorization circles: enrolling students, tracking attendance, logging memorization and revision sessions, and producing reports.</p>
+  <div class="role"><b>Admin:</b> sees all students, circles, and teachers; can manage accounts and reset data.</div>
+  <div class="role"><b>Sheikh (Teacher):</b> sees only their own students and circles; records their attendance, sessions, and reports.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">2</span> Signing In</h2>
+  <ol>
+    <li>Open the app to reach the login screen.</li>
+    <li>Enter the <b>email</b> and <b>password</b> provided by your admin.</li>
+    <li>Tap <b>Sign In</b>.</li>
+    <li>To switch language, tap the globe icon 🌐 at the top of the card (English / عربي).</li>
+  </ol>
+  <div class="tip"><b>Note:</b> If you see "Invalid email or password", double-check your credentials or contact your admin.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">3</span> Dashboard</h2>
+  <p>Shows today's summary in quick cards:</p>
+  <ul>
+    <li><b>Total Students</b> and active count.</li>
+    <li><b>Present Today</b> with attendance rate.</li>
+    <li><b>Absent Today</b>.</li>
+    <li><b>Verses Memorized Today</b> and number of sessions.</li>
+  </ul>
+  <p><b>Circle stats:</b> use the dropdown above the cards to pick a specific circle (e.g. the Fajr circle) or "All circles". Because a student may attend at more than one time, the present/absent figures update based on the chosen circle.</p>
+  <p>The dashboard also shows weekly progress and attendance-rate charts, a <b>Top Students</b> list, and quick-action buttons.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">4</span> Students</h2>
+  <ol>
+    <li>Tap <b>+ Add Student</b> and fill in: name (Arabic), name (English), gender, phone, circle, status.</li>
+    <li>Use the <b>search</b> bar and filters to narrow the list.</li>
+    <li>Each student has actions: <b>View</b> (full profile), <b>Edit</b>, <b>Archive</b>, <b>Delete</b>.</li>
+    <li>Tap <b>CSV</b> or <b>XLS</b> to export the student list.</li>
+  </ol>
+  <p>The student profile shows completion %, total verses, attendance %, current position, and a <b>Progress Map</b>.</p>
+  <div class="tip"><b>Archive vs Delete:</b> Archiving hides a student but keeps their data; deleting permanently removes them along with their sessions and attendance.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">5</span> Attendance</h2>
+  <ol>
+    <li>Choose the <b>circle</b> and <b>date</b> at the top.</li>
+    <li>For each student pick a status: <b>Present</b> / <b>Late</b> / <b>Excused</b> / <b>Absent</b>.</li>
+    <li>Use <b>Mark all</b> to set one status for everyone.</li>
+    <li>Tap <b>Save Attendance</b> at the bottom.</li>
+  </ol>
+  <div class="tip"><b>Important:</b> Record attendance per circle so the dashboard stats stay accurate (e.g. Fajr attendance separate from another circle).</div>
+</div>
+
+<div class="section pagebreak">
+  <h2><span class="n">6</span> Qur'an Progress &amp; Sessions</h2>
+  <ol>
+    <li>Select a student from the side list.</li>
+    <li>Tap <b>Record New Session</b>.</li>
+    <li>Choose the type: <b>New Memorization</b> or <b>Revision</b>.</li>
+    <li>Set the range <b>From</b> and <b>To</b> (surah and ayah number); you can clear a number and type a new one freely.</li>
+    <li>Add a star <b>rating</b> and <b>notes</b>, then tap <b>Save</b>.</li>
+  </ol>
+  <p>The app automatically counts the ayahs and updates the student's current position and total memorized. Sessions appear in the <b>timeline</b> and can be edited or deleted.</p>
+  <div class="tip"><b>Admin:</b> "Reset All" zeroes every student's progress and deletes all sessions — use with care.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">7</span> Progress Map (Juz / Hizb / Thumn)</h2>
+  <p>In the <b>Juz Map</b> tab (and the student profile) you can switch the view:</p>
+  <table>
+    <tr><th>Unit</th><th>Count</th><th>Description</th></tr>
+    <tr><td>Juz</td><td>30</td><td>The Qur'an divided into thirty parts</td></tr>
+    <tr><td>Hizb</td><td>60</td><td>Two hizb per juz</td></tr>
+    <tr><td>Thumn</td><td>480</td><td>Eight thumn per hizb</td></tr>
+  </table>
+  <p>Completed cells turn green based on the student's current memorization position.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">8</span> Muraja'ah (Revision)</h2>
+  <p>Lists each student's revision sessions with status (completed / pending / missed / partial) and rating. Use the filters to pick a student or status.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">9</span> Matn (Texts)</h2>
+  <ol>
+    <li>Tap <b>Add Matn</b> and choose the student and text type (Bayquniyyah, Jazariyyah, Ajurrumiyyah…).</li>
+    <li>Set the chapter, progress %, and notes.</li>
+    <li>Matn cards show a progress bar and can be deleted.</li>
+  </ol>
+  <div class="tip"><b>Note:</b> Matn data is stored locally on the device.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">10</span> Analytics</h2>
+  <p>Comprehensive stats: total students, total verses memorized, average attendance, graduates, plus charts for weekly verses, monthly attendance, student status distribution, and student ranking.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">11</span> Reports &amp; Export</h2>
+  <ol>
+    <li>Pick the <b>date range</b> (from / to).</li>
+    <li>Choose a report: Attendance, Progress, Revision, or Comprehensive.</li>
+    <li>Tap <b>PDF</b>, <b>Excel</b>, or <b>CSV</b> to export.</li>
+  </ol>
+  <p>Reports export with proper Arabic headers and direction. On desktop a print dialog opens to save as PDF; on mobile the file is shared.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">12</span> Halaqat (Circles)</h2>
+  <ol>
+    <li>Tap <b>Add Circle</b> and enter the name (AR/EN), teacher, location, and status (active/inactive).</li>
+    <li>Circles can be edited or deleted. Deleting detaches students without deleting them.</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2><span class="n">13</span> Teachers &amp; Accounts <small>(Admin)</small></h2>
+  <ol>
+    <li>In <b>Teachers</b>, tap <b>Add Account</b>.</li>
+    <li>Enter name, email, password, and role (Sheikh / Admin).</li>
+    <li>Each account card shows its circles and students count and can be edited or deleted.</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2><span class="n">14</span> Settings</h2>
+  <ul>
+    <li><b>Account:</b> view name, email, and role.</li>
+    <li><b>Language:</b> switch between Arabic and English.</li>
+    <li><b>Theme:</b> light / dark / system.</li>
+    <li><b>Security:</b> change password.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="n">15</span> FAQ</h2>
+  <table>
+    <tr><th>Issue</th><th>Solution</th></tr>
+    <tr><td>Attendance numbers don't show on the dashboard</td><td>Make sure attendance was saved with the correct circle selected.</td></tr>
+    <tr><td>Student progress didn't update</td><td>Record a "New Memorization" session with a valid range; progress is calculated automatically.</td></tr>
+    <tr><td>Forgot password</td><td>Ask your admin to reset it from the Teachers section.</td></tr>
+    <tr><td>Matn data disappeared</td><td>It is stored locally on the same device and browser.</td></tr>
+  </table>
+</div>
+
+<div class="foot">
+  Hifdhi — Qur'an Memorization Circle Management · User Guide
+</div>
+
+</body>
+</html>

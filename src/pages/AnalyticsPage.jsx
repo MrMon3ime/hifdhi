@@ -1,32 +1,80 @@
-import { useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { mockStudents, mockSessions, mockAttendance, generateWeeklyProgressData, generateMonthlyAttendanceData } from '../data/mockData.js';
-import { getSurahName } from '../data/quranData.js';
+import { countAyahsBetween } from '../data/quranData.js';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadialBarChart, RadialBar,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
+import { Users, BookOpen, Calendar, GraduationCap } from 'lucide-react';
 
 export default function AnalyticsPage() {
-  const { t, lang, currentUser, resolvedTheme } = useApp();
+  const { t, lang, currentUser, resolvedTheme, dbData } = useApp();
   const isAdmin = currentUser?.role === 'admin';
   const isDark = resolvedTheme === 'dark';
 
-  const myStudents = isAdmin
-    ? mockStudents
-    : mockStudents.filter(s => s.sheikhId === currentUser?.id);
+  const safeStudent = (s) => ({
+    ...s,
+    totalAyahMemorized: s.totalAyahMemorized ?? 0,
+    attendancePct: s.attendancePct ?? 0,
+    fullName: s.fullName || 'بدون اسم',
+  });
+
+  const myStudents = (isAdmin
+    ? (dbData?.students || [])
+    : (dbData?.students || []).filter(s => s.sheikhId === currentUser?.id)
+  ).map(safeStudent);
 
   const activeStudents = myStudents.filter(s => s.status === 'active');
   const graduated = myStudents.filter(s => s.status === 'graduated');
   const paused = myStudents.filter(s => s.status === 'paused');
 
-  const totalAyah = myStudents.reduce((sum, s) => sum + s.totalAyahMemorized, 0);
+  const totalAyah = myStudents.reduce((sum, s) => sum + (s.totalAyahMemorized || 0), 0);
   const avgAttendance = myStudents.length
-    ? Math.round(myStudents.reduce((sum, s) => sum + s.attendancePct, 0) / myStudents.length)
+    ? Math.round(myStudents.reduce((sum, s) => sum + (s.attendancePct || 0), 0) / myStudents.length)
     : 0;
 
-  const weekData = generateWeeklyProgressData(lang);
-  const monthData = generateMonthlyAttendanceData(lang);
+  const sessions = dbData?.sessions || [];
+  const attendance = dbData?.attendance || [];
+
+  // Generate dynamic week data from sessions
+  const last7Days = Array.from({length: 7}, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().split('T')[0];
+  });
+  
+  const sessionVerses = (s) => s.ayah_count || s.ayahCount || countAyahsBetween(
+    s.fromSurah || s.from_surah,
+    s.fromAyah || s.from_ayah,
+    s.toSurah || s.to_surah,
+    s.toAyah || s.to_ayah,
+  ) || 0;
+
+  const weekData = last7Days.map(date => {
+    const daySessions = sessions.filter(s => s.date === date);
+    return {
+      name: new Date(date).toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' }),
+      verses: daySessions.reduce((sum, s) => sum + sessionVerses(s), 0)
+    };
+  });
+
+  const monthData = Array.from({ length: 4 }, (_, i) => {
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - (3 - i) * 7 - 6);
+    const weekEnd = new Date();
+    weekEnd.setDate(weekEnd.getDate() - (3 - i) * 7);
+    const weekAttendance = attendance.filter(a => {
+      const d = new Date(a.date);
+      return d >= weekStart && d <= weekEnd;
+    });
+    const pct = weekAttendance.length > 0
+      ? Math.round(weekAttendance.filter(a => a.status === 'present' || a.status === 'late').length / weekAttendance.length * 100)
+      : 0;
+    return {
+      name: lang === 'ar' ? `أسبوع ${i + 1}` : `Week ${i + 1}`,
+      present: pct,
+      absent: weekAttendance.length > 0 ? 100 - pct : 0,
+    };
+  });
 
   const chartColors = {
     grid: isDark ? '#334155' : '#E2E8F0',
@@ -80,22 +128,24 @@ export default function AnalyticsPage() {
       {/* KPI Row */}
       <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
         {[
-          { label: lang === 'ar' ? 'إجمالي الطلاب' : 'Total Students', value: myStudents.length, icon: '👥', color: 'var(--emerald)' },
-          { label: lang === 'ar' ? 'إجمالي الآيات المحفوظة' : 'Total Verses Memorized', value: totalAyah.toLocaleString(), icon: '📖', color: '#D4AF37' },
-          { label: lang === 'ar' ? 'متوسط الحضور' : 'Avg Attendance', value: `${avgAttendance}%`, icon: '📅', color: '#3B82F6' },
-          { label: lang === 'ar' ? 'المتخرجون' : 'Graduated', value: graduated.length, icon: '🎓', color: '#8B5CF6' },
-        ].map((kpi, i) => (
+          { label: lang === 'ar' ? 'إجمالي الطلاب' : 'Total Students', value: myStudents.length, icon: Users, color: 'var(--emerald)' },
+          { label: lang === 'ar' ? 'إجمالي الآيات المحفوظة' : 'Total Verses Memorized', value: totalAyah.toLocaleString(), icon: BookOpen, color: '#D4AF37' },
+          { label: lang === 'ar' ? 'متوسط الحضور' : 'Avg Attendance', value: `${avgAttendance}%`, icon: Calendar, color: '#3B82F6' },
+          { label: lang === 'ar' ? 'المتخرجون' : 'Graduated', value: graduated.length, icon: GraduationCap, color: '#8B5CF6' },
+        ].map((kpi, i) => {
+          const Icon = kpi.icon;
+          return (
           <div key={i} className="card" style={{
             display: 'flex', flexDirection: 'column', gap: '0.5rem',
             textAlign: 'center', cursor: 'default',
           }}>
-            <div style={{ fontSize: '2rem' }}>{kpi.icon}</div>
+            <div style={{ display: 'flex', justifyContent: 'center', color: kpi.color }}><Icon size={32} /></div>
             <div style={{ fontSize: '1.75rem', fontWeight: 700, color: kpi.color, lineHeight: 1 }}>
               {kpi.value}
             </div>
             <div className="text-xs text-muted">{kpi.label}</div>
           </div>
-        ))}
+        )})}
       </div>
 
       {/* Charts Row 1 */}
@@ -108,7 +158,7 @@ export default function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={weekData} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="verses" name={lang === 'ar' ? 'آيات' : 'Verses'}
@@ -126,8 +176,8 @@ export default function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={monthData}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: chartColors.text, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} domain={[50, 100]} />
+              <XAxis dataKey="name" tick={{ fill: chartColors.text, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} />
               <Tooltip content={<CustomTooltip />} />
               <Line type="monotone" dataKey="present"
                 name={lang === 'ar' ? 'حضور %' : 'Present %'}

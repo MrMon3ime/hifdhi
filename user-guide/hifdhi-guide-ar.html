@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8" />
+<title>دليل استخدام تطبيق حِفْظِي</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Tahoma", "Segoe UI", "Traditional Arabic", sans-serif; color: #0F172A; line-height: 1.9; font-size: 13px; }
+  h1, h2, h3 { color: #0F766E; }
+  .cover { text-align: center; padding: 60px 0 30px; }
+  .cover .logo { width: 96px; height: 96px; border-radius: 24px; background: linear-gradient(135deg,#0F766E,#115E59); color: #D4AF37; display: inline-flex; align-items: center; justify-content: center; font-size: 48px; margin-bottom: 18px; }
+  .cover h1 { font-size: 40px; margin: 6px 0; }
+  .cover p { color: #475569; font-size: 16px; }
+  .badge { display: inline-block; background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; border-radius: 999px; padding: 4px 14px; font-size: 12px; font-weight: 700; margin-top: 10px; }
+  .section { margin-top: 26px; page-break-inside: avoid; }
+  .section h2 { font-size: 20px; border-bottom: 3px solid #0F766E; padding-bottom: 6px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section h2 .n { background: #0F766E; color: #fff; width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+  ol, ul { padding-inline-start: 22px; margin: 6px 0; }
+  li { margin: 4px 0; }
+  .tip { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px; padding: 8px 12px; margin: 10px 0; font-size: 12.5px; }
+  .tip b { color: #92400E; }
+  .role { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 8px 12px; margin: 10px 0; font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid #E2E8F0; padding: 7px 10px; text-align: right; font-size: 12.5px; }
+  th { background: #0F766E; color: #fff; }
+  tr:nth-child(even) td { background: #F8FAFC; }
+  .toc { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 20px; }
+  .toc ol { columns: 2; }
+  .foot { margin-top: 40px; text-align: center; color: #94A3B8; font-size: 11px; border-top: 1px solid #E2E8F0; padding-top: 10px; }
+  .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">☾</div>
+  <h1>حِفْظِي</h1>
+  <p>نظام إدارة حلقات تحفيظ القرآن الكريم</p>
+  <div class="badge">دليل المستخدم — الإصدار 1.0</div>
+</div>
+
+<div class="section toc">
+  <h2>المحتويات</h2>
+  <ol>
+    <li>مقدمة والأدوار</li>
+    <li>تسجيل الدخول</li>
+    <li>لوحة التحكم</li>
+    <li>الطلاب</li>
+    <li>الحضور</li>
+    <li>متابعة الحفظ والجلسات</li>
+    <li>خريطة التقدم (أجزاء / أحزاب / أثمان)</li>
+    <li>المراجعة</li>
+    <li>المتون</li>
+    <li>التحليلات</li>
+    <li>التقارير والتصدير</li>
+    <li>الحلقات</li>
+    <li>المشايخ والحسابات</li>
+    <li>الإعدادات</li>
+    <li>أسئلة شائعة</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2><span class="n">1</span> مقدمة والأدوار</h2>
+  <p>تطبيق <b>حِفْظِي</b> يساعد المشايخ والمسؤولين على إدارة حلقات التحفيظ: تسجيل الطلاب، متابعة الحضور، تسجيل جلسات الحفظ والمراجعة، وإصدار التقارير.</p>
+  <div class="role"><b>المسؤول (Admin):</b> يرى جميع الطلاب والحلقات والمشايخ، ويمكنه إدارة الحسابات وإعادة ضبط البيانات.</div>
+  <div class="role"><b>الشيخ (Sheikh):</b> يرى طلابه وحلقاته فقط، ويسجل الحضور والجلسات والتقارير الخاصة به.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">2</span> تسجيل الدخول</h2>
+  <ol>
+    <li>افتح التطبيق، فتظهر شاشة الدخول.</li>
+    <li>أدخل <b>البريد الإلكتروني</b> و<b>كلمة المرور</b> اللذين زوّدك بهما المسؤول.</li>
+    <li>اضغط <b>تسجيل الدخول</b>.</li>
+    <li>لتغيير اللغة اضغط أيقونة الكرة الأرضية 🌐 أعلى البطاقة (عربي / English).</li>
+  </ol>
+  <div class="tip"><b>ملاحظة:</b> إذا ظهرت رسالة «البريد أو كلمة المرور غير صحيحة» تأكد من البيانات أو راجع المسؤول.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">3</span> لوحة التحكم</h2>
+  <p>تعرض ملخص اليوم عبر بطاقات سريعة:</p>
+  <ul>
+    <li><b>إجمالي الطلاب</b> وعدد النشطين.</li>
+    <li><b>حضروا اليوم</b> ونسبة الحضور.</li>
+    <li><b>غائبون اليوم</b>.</li>
+    <li><b>آيات حُفظت اليوم</b> وعدد الجلسات.</li>
+  </ul>
+  <p><b>إحصاءات الحلقة:</b> من القائمة المنسدلة أعلى البطاقات اختر حلقة معيّنة (مثل حلقة الفجر) أو «كل الحلقات»؛ لأن الطالب قد يحضر في أكثر من وقت، فتتغيّر أرقام الحضور والغياب حسب الحلقة المختارة.</p>
+  <p>كما تعرض اللوحة رسومًا بيانية لتقدّم الأسبوع ونسبة الحضور، وقائمة <b>أفضل الطلاب</b>، وأزرار وصول سريع.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">4</span> الطلاب</h2>
+  <ol>
+    <li>اضغط <b>+ إضافة طالب</b> وأدخل: الاسم (عربي)، الاسم (إنجليزي)، الجنس، الهاتف، الحلقة، الحالة.</li>
+    <li>استخدم شريط <b>البحث</b> والفلاتر لعرض طلاب محددين.</li>
+    <li>لكل طالب أزرار: <b>عرض</b> (الملف الكامل)، <b>تعديل</b>، <b>أرشفة</b>، <b>حذف</b>.</li>
+    <li>للتصدير اضغط <b>CSV</b> أو <b>XLS</b> لتحميل قائمة الطلاب.</li>
+  </ol>
+  <p>عند فتح ملف الطالب تظهر: نسبة الإنجاز، إجمالي الآيات، نسبة الحضور، الموقع الحالي، و<b>خريطة التقدم</b>.</p>
+  <div class="tip"><b>الأرشفة مقابل الحذف:</b> الأرشفة تُخفي الطالب مع الاحتفاظ ببياناته، أما الحذف فيزيله نهائيًا مع جلساته وحضوره.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">5</span> الحضور</h2>
+  <ol>
+    <li>اختر <b>الحلقة</b> و<b>التاريخ</b> من الأعلى.</li>
+    <li>لكل طالب اختر الحالة: <b>حاضر</b> / <b>متأخر</b> / <b>معذور</b> / <b>غائب</b>.</li>
+    <li>يمكنك <b>تحديد الكل</b> بحالة واحدة بالضغط على بطاقة الحالة أو أزرار «تحديد الكل».</li>
+    <li>اضغط <b>حفظ الحضور</b> في الأسفل.</li>
+  </ol>
+  <div class="tip"><b>مهم:</b> سجّل الحضور لكل حلقة على حدة حتى تظهر الإحصاءات بدقة في لوحة التحكم (مثلاً حضور الفجر منفصل عن حلقة أخرى).</div>
+</div>
+
+<div class="section pagebreak">
+  <h2><span class="n">6</span> متابعة الحفظ والجلسات</h2>
+  <ol>
+    <li>اختر الطالب من القائمة الجانبية.</li>
+    <li>اضغط <b>تسجيل جلسة جديدة</b>.</li>
+    <li>اختر النوع: <b>حفظ جديد</b> أو <b>مراجعة</b>.</li>
+    <li>حدّد <b>من الآية</b> و<b>إلى الآية</b> (السورة ورقم الآية)؛ يمكنك مسح الرقم وكتابة رقم جديد بحرية.</li>
+    <li>أضف <b>التقييم</b> بالنجوم و<b>الملاحظات</b> ثم اضغط <b>حفظ</b>.</li>
+  </ol>
+  <p>يحسب التطبيق تلقائيًا عدد الآيات ويحدّث الموقع الحالي للطالب وإجمالي المحفوظ. تظهر الجلسات في <b>مسار التقدم</b> مع إمكانية التعديل أو الحذف.</p>
+  <div class="tip"><b>للمسؤول:</b> زر «إعادة تعيين الكل» يصفّر تقدم جميع الطلاب ويحذف كل الجلسات — استخدمه بحذر.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">7</span> خريطة التقدم (أجزاء / أحزاب / أثمان)</h2>
+  <p>في تبويب <b>خريطة الأجزاء</b> داخل متابعة الحفظ (وفي ملف الطالب) يمكنك اختيار طريقة العرض:</p>
+  <table>
+    <tr><th>الوحدة</th><th>العدد</th><th>الوصف</th></tr>
+    <tr><td>الأجزاء</td><td>30</td><td>تقسيم القرآن إلى ثلاثين جزءًا</td></tr>
+    <tr><td>الأحزاب</td><td>60</td><td>حزبان في كل جزء</td></tr>
+    <tr><td>الأثمان</td><td>480</td><td>ثمانية أثمان في كل حزب</td></tr>
+  </table>
+  <p>تتلوّن الخانة المكتملة بالأخضر حسب موضع الطالب الحالي في الحفظ.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">8</span> المراجعة</h2>
+  <p>تعرض جلسات المراجعة لكل طالب مع حالتها (مكتمل / معلق / فائت / جزئي) والتقييم. استخدم الفلاتر لاختيار طالب أو حالة معيّنة.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">9</span> المتون</h2>
+  <ol>
+    <li>اضغط <b>إضافة متن</b> واختر الطالب ونوع المتن (البيقونية، الجزرية، الآجرومية…).</li>
+    <li>حدّد الباب ونسبة الإنجاز والملاحظات.</li>
+    <li>تظهر بطاقات المتون مع شريط التقدم، ويمكن حذفها.</li>
+  </ol>
+  <div class="tip"><b>ملاحظة:</b> تُحفظ بيانات المتون محليًا على الجهاز.</div>
+</div>
+
+<div class="section">
+  <h2><span class="n">10</span> التحليلات</h2>
+  <p>إحصاءات شاملة: إجمالي الطلاب، إجمالي الآيات المحفوظة، متوسط الحضور، عدد المتخرجين، ورسوم بيانية للآيات الأسبوعية ونسبة الحضور وتوزيع حالات الطلاب وترتيب الطلاب.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">11</span> التقارير والتصدير</h2>
+  <ol>
+    <li>اختر <b>نطاق التاريخ</b> (من / إلى).</li>
+    <li>اختر نوع التقرير: الحضور، التقدم، المراجعة، أو شامل.</li>
+    <li>اضغط <b>PDF</b> أو <b>إكسل</b> أو <b>CSV</b> للتصدير.</li>
+  </ol>
+  <p>تُصدَّر التقارير بالعناوين العربية وباتجاه صحيح (RTL). على الحاسوب يفتح خيار الطباعة لحفظها كـ PDF، وعلى الهاتف تتم مشاركة الملف.</p>
+</div>
+
+<div class="section">
+  <h2><span class="n">12</span> الحلقات</h2>
+  <ol>
+    <li>اضغط <b>إضافة حلقة</b> وأدخل الاسم (عربي/إنجليزي)، المعلّم، المكان، والحالة (نشطة/موقوفة).</li>
+    <li>يمكن تعديل أو حذف الحلقة. عند الحذف يُفصل الطلاب عنها دون حذفهم.</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2><span class="n">13</span> المشايخ والحسابات <small>(للمسؤول)</small></h2>
+  <ol>
+    <li>من قسم <b>المشايخ</b> اضغط <b>إضافة حساب</b>.</li>
+    <li>أدخل الاسم والبريد وكلمة المرور والصلاحية (شيخ / مسؤول).</li>
+    <li>تظهر بطاقة لكل حساب مع عدد حلقاته وطلابه، ويمكن تعديله أو حذفه.</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2><span class="n">14</span> الإعدادات</h2>
+  <ul>
+    <li><b>الحساب:</b> عرض الاسم والبريد والصلاحية.</li>
+    <li><b>اللغة:</b> التبديل بين العربية والإنجليزية.</li>
+    <li><b>المظهر:</b> فاتح / داكن / حسب النظام.</li>
+    <li><b>الأمان:</b> تغيير كلمة المرور.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="n">15</span> أسئلة شائعة</h2>
+  <table>
+    <tr><th>السؤال</th><th>الحل</th></tr>
+    <tr><td>لا تظهر أرقام الحضور في اللوحة</td><td>تأكد من حفظ الحضور مع اختيار الحلقة الصحيحة.</td></tr>
+    <tr><td>لم يتحدّث تقدّم الطالب</td><td>سجّل جلسة «حفظ جديد» بنطاق صحيح؛ يُحتسب التقدم تلقائيًا.</td></tr>
+    <tr><td>نسيت كلمة المرور</td><td>راجع المسؤول لإعادة تعيينها من قسم المشايخ.</td></tr>
+    <tr><td>اختفت بيانات المتون</td><td>تُحفظ محليًا على نفس الجهاز والمتصفح.</td></tr>
+  </table>
+</div>
+
+<div class="foot">
+  حِفْظِي — نظام إدارة حلقات تحفيظ القرآن الكريم · دليل المستخدم · بسم الله الرحمن الرحيم
+</div>
+
+</body>
+</html>

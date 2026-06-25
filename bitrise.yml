@@ -1,0 +1,62 @@
+format_version: "13"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: other
+
+# ----------------------------------------------------------------------------
+#  Hifdhi (حِفْظِي) — Capacitor iOS build for Bitrise
+#  Capacitor 8 uses Swift Package Manager (no CocoaPods), so we build the
+#  Xcode PROJECT (not a workspace): ios/App/App.xcodeproj, scheme "App".
+# ----------------------------------------------------------------------------
+
+app:
+  envs:
+    - BITRISE_PROJECT_PATH: ios/App/App.xcodeproj
+    - BITRISE_SCHEME: App
+    - BITRISE_CONFIGURATION: Release
+    # Change to "app-store" for TestFlight/App Store, "ad-hoc" for shared testing.
+    - DISTRIBUTION_METHOD: development
+
+workflows:
+  build-ios:
+    steps:
+      - activate-ssh-key@4: {}
+      - git-clone@8: {}
+
+      # 1) Install JS deps, inject Supabase keys, build web, sync iOS
+      - script@1:
+          title: Build web app + cap sync ios
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -euxo pipefail
+
+                # Supabase keys come from Bitrise Secrets (Code signing & files > Secrets)
+                cat > .env.local <<EOF
+                VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+                VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+                EOF
+
+                npm ci || npm install
+                npm run build
+                npx cap sync ios
+
+      # 2) Archive & export a signed .ipa (automatic signing via App Store Connect API key)
+      - xcode-archive@5:
+          inputs:
+            - project_path: $BITRISE_PROJECT_PATH
+            - scheme: $BITRISE_SCHEME
+            - configuration: $BITRISE_CONFIGURATION
+            - distribution_method: $DISTRIBUTION_METHOD
+            - automatic_code_signing: api-key
+            - xcodebuild_options: "-skipPackagePluginValidation"
+
+      # 3) Upload the .ipa (and logs) to the Bitrise build artifacts
+      - deploy-to-bitrise-io@2: {}
+
+      # --- OPTIONAL: send straight to TestFlight (needs DISTRIBUTION_METHOD=app-store) ---
+      # - deploy-to-itunesconnect-application-loader@1: {}
+
+meta:
+  bitrise.io:
+    stack: osx-xcode-16.2.x
+    machine_type_id: g2-m1.4core

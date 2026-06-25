@@ -1,12 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { mockStudents, mockAttendance, mockSessions, mockRevisions, generateWeeklyProgressData, generateMonthlyAttendanceData } from '../data/mockData.js';
-import { getSurahName, SURAHS } from '../data/quranData.js';
+import { getSurahName, countAyahsBetween } from '../data/quranData.js';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Users, CalendarCheck, BookOpen, RefreshCw, TrendingUp, Star, AlertCircle } from 'lucide-react';
+import { Users, CalendarCheck, BookOpen, RefreshCw, AlertCircle, CheckCircle2, FileText } from 'lucide-react';
 
 function ProgressRing({ pct, size = 64, stroke = 6, color = '#0F766E' }) {
   const r = (size - stroke) / 2;
@@ -44,24 +43,105 @@ function KpiCard({ icon: Icon, label, value, change, changeType, iconClass }) {
 }
 
 export default function DashboardPage() {
-  const { t, lang, currentUser, resolvedTheme, setActivePage } = useApp();
+  const { t, lang, currentUser, resolvedTheme, setActivePage, dbData } = useApp();
   const isAdmin = currentUser?.role === 'admin';
 
-  const myStudents = isAdmin
-    ? mockStudents
-    : mockStudents.filter(s => s.sheikhId === currentUser?.id);
+  const safeStudent = (s) => {
+    const student = s || {};
+    return {
+      ...student,
+      fullName: String(student.fullName || 'بدون اسم'),
+      juzCompleted: Array.isArray(student.juzCompleted) ? student.juzCompleted : [],
+      attendancePct: student.attendancePct ?? 0,
+      totalAyahMemorized: student.totalAyahMemorized ?? 0,
+      currentSurah: student.currentSurah ?? 1,
+      currentAyah: student.currentAyah ?? 1,
+      fullNameEn: String(student.fullNameEn || ''),
+    };
+  };
+
+  const myStudents = (isAdmin
+    ? (dbData?.students || [])
+    : (dbData?.students || []).filter(s => s.sheikhId === currentUser?.id)
+  ).map(safeStudent);
 
   const activeStudents = myStudents.filter(s => s.status === 'active');
-  const today = new Date().toISOString().split('T')[0];
-  const todayAtt = mockAttendance.filter(a => a.date === today);
-  const presentCount = todayAtt.filter(a => a.status === 'present' || a.status === 'late').length;
-  const absentCount = activeStudents.length - presentCount;
-  const todaySessions = mockSessions.filter(s => s.date === today);
-  const todayVerses = todaySessions.reduce((sum, s) => sum + s.ayahCount, 0);
-  const attRate = activeStudents.length > 0 ? Math.round((presentCount / activeStudents.length) * 100) : 0;
 
-  const weekData = generateWeeklyProgressData(lang);
-  const monthData = generateMonthlyAttendanceData(lang);
+  // Halaqa picker — a student may attend at Fajr or another time, so attendance
+  // stats can be viewed per circle (or across all circles).
+  const myHalaqat = (dbData?.halaqat || []).filter(h => isAdmin || h.sheikhId === currentUser?.id);
+  const [selectedHalaqa, setSelectedHalaqa] = useState('all');
+  const halaqaOf = (a) => a.halaqaId || a.halaqa_id || '';
+  const inSelectedHalaqa = (a) => selectedHalaqa === 'all' || halaqaOf(a) === selectedHalaqa;
+
+  const today = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })();
+  const todayAtt = (dbData?.attendance || []).filter(a => a.date === today && inSelectedHalaqa(a));
+  const studentId = (a) => a.studentId || a.student_id;
+  const presentIds = new Set(todayAtt.filter(a => a.status === 'present' || a.status === 'late').map(studentId));
+  const presentCount = presentIds.size;
+
+  let absentCount, attRate;
+  if (selectedHalaqa === 'all') {
+    absentCount = Math.max(0, activeStudents.length - presentCount);
+    attRate = activeStudents.length > 0 ? Math.round((presentCount / activeStudents.length) * 100) : 0;
+  } else {
+    const absentIds = new Set(todayAtt.filter(a => a.status === 'absent').map(studentId));
+    absentCount = absentIds.size;
+    const totalMarked = presentCount + absentCount;
+    attRate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : 0;
+  }
+
+  const todaySessions = (dbData?.sessions || []).filter(s => s.date === today);
+  const todayVerses = todaySessions.reduce((sum, s) => {
+    let count = s.ayah_count || s.ayahCount;
+    if (!count && s.from_surah && s.to_surah) {
+      count = countAyahsBetween(s.from_surah, s.from_ayah, s.to_surah, s.to_ayah);
+    }
+    return sum + (count || 0);
+  }, 0);
+
+  // Real chart data computed from actual sessions
+  const allSessions = dbData?.sessions || [];
+  const allAttendance = (dbData?.attendance || []).filter(inSelectedHalaqa);
+
+  const weekData = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const dateStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      const daySessions = allSessions.filter(s => s.date === dateStr);
+      return {
+        name: d.toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' }),
+        verses: daySessions.reduce((sum, s) => {
+          let count = s.ayah_count || s.ayahCount;
+          if (!count && s.from_surah && s.to_surah) {
+            count = countAyahsBetween(s.from_surah, s.from_ayah, s.to_surah, s.to_ayah);
+          }
+          return sum + (count || 0);
+        }, 0),
+      };
+    });
+  }, [allSessions, lang]);
+
+  const monthData = useMemo(() => {
+    return Array.from({ length: 4 }, (_, i) => {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - (3 - i) * 7 - 6);
+      const weekEnd = new Date();
+      weekEnd.setDate(weekEnd.getDate() - (3 - i) * 7);
+      const weekAttendance = allAttendance.filter(a => {
+        const d = new Date(a.date);
+        return d >= weekStart && d <= weekEnd;
+      });
+      const pct = weekAttendance.length > 0
+        ? Math.round(weekAttendance.filter(a => a.status === 'present' || a.status === 'late').length / weekAttendance.length * 100)
+        : 0;
+      return {
+        name: lang === 'ar' ? `أسبوع ${i + 1}` : `Week ${i + 1}`,
+        pct,
+      };
+    });
+  }, [allAttendance, lang]);
   const isDark = resolvedTheme === 'dark';
 
   const chartColors = {
@@ -75,14 +155,12 @@ export default function DashboardPage() {
     .sort((a, b) => b.totalAyahMemorized - a.totalAyahMemorized)
     .slice(0, 5);
 
-  const pendingRevisions = mockRevisions.filter(r => r.status === 'pending').length;
-  const missedRevisions = mockRevisions.filter(r => r.status === 'missed').length;
+  const revisionSessions = (dbData?.sessions || []).filter(s => s.type === 'muraja3ah' || s.type === 'revision');
+  const pendingRevisions = revisionSessions.filter(r => r.status === 'pending').length;
+  const missedRevisions = revisionSessions.filter(r => r.status === 'missed').length;
 
   const greet = () => {
-    const h = new Date().getHours();
-    if (h < 12) return t('goodMorning');
-    if (h < 17) return t('goodAfternoon');
-    return t('goodEvening');
+    return lang === 'ar' ? 'السلام عليكم' : 'Peace be upon you';
   };
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -104,11 +182,30 @@ export default function DashboardPage() {
   return (
     <div className="page-body">
       {/* Greeting */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 className="text-display" style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>
-          {greet()}، {currentUser?.fullName?.split(' ')[0]} 👋
-        </h1>
-        <p className="text-secondary text-small">{t('todaySummary')}</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+        <div>
+          <h1 className="text-display" style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>
+            {greet()}، {currentUser?.fullName?.split(' ')[0]}
+          </h1>
+          <p className="text-secondary text-small">{t('todaySummary')}</p>
+        </div>
+        {/* Per-circle attendance stats (Fajr / other times / all) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
+            {lang === 'ar' ? 'إحصاءات الحلقة:' : 'Circle stats:'}
+          </span>
+          <select
+            className="select"
+            value={selectedHalaqa}
+            onChange={e => setSelectedHalaqa(e.target.value)}
+            style={{ width: 'auto', minWidth: 150 }}
+          >
+            <option value="all">{lang === 'ar' ? 'كل الحلقات' : 'All circles'}</option>
+            {myHalaqat.map(h => (
+              <option key={h.id} value={h.id}>{lang === 'ar' ? h.name : (h.nameEn || h.name)}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -149,7 +246,7 @@ export default function DashboardPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={weekData} barSize={24}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="verses" name={lang === 'ar' ? 'آيات' : 'Verses'}
@@ -169,11 +266,11 @@ export default function DashboardPage() {
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={monthData}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: chartColors.text, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} domain={[50, 100]} />
+              <XAxis dataKey="name" tick={{ fill: chartColors.text, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="present" name={lang === 'ar' ? 'حضور %' : 'Present %'}
-                stroke="#0F766E" strokeWidth={2.5} dot={{ fill: '#0F766E', r: 3 }} />
+              <Line type="monotone" dataKey="pct" name={lang === 'ar' ? 'حضور %' : 'Present %'}
+                stroke="#0F766E" strokeWidth={2.5} dot={{ fill: '#0F766E', r: 4 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -192,7 +289,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
             {topStudents.map((student, idx) => {
               const pct = Math.round((student.totalAyahMemorized / 6236) * 100);
-              const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+              const medals = ['#1', '#2', '#3', '#4', '#5'];
               return (
                 <div key={student.id} style={{
                   display: 'flex', alignItems: 'center', gap: '0.875rem',
@@ -202,7 +299,7 @@ export default function DashboardPage() {
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}>
-                  <span style={{ fontSize: '1.1rem', minWidth: 24 }}>{medals[idx]}</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-muted)', minWidth: 24 }}>{medals[idx]}</span>
                   <div className="avatar avatar-sm">{student.fullName[0]}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="text-small font-semibold truncate">{student.fullName}</div>
@@ -269,21 +366,24 @@ export default function DashboardPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               {[
-                { label: t('markAttendance'), page: 'attendance', emoji: '✅' },
-                { label: t('recordSession'), page: 'quranProgress', emoji: '📖' },
-                { label: t('students'), page: 'students', emoji: '👥' },
-                { label: t('reports'), page: 'reports', emoji: '📄' },
-              ].map(action => (
-                <button
-                  key={action.page}
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setActivePage(action.page)}
-                  style={{ justifyContent: 'flex-start', gap: '0.625rem' }}
-                >
-                  <span>{action.emoji}</span>
-                  <span>{action.label}</span>
-                </button>
-              ))}
+                { label: t('markAttendance'), page: 'attendance', icon: CheckCircle2 },
+                { label: t('recordSession'), page: 'quranProgress', icon: BookOpen },
+                { label: t('students'), page: 'students', icon: Users },
+                { label: t('reports'), page: 'reports', icon: FileText },
+              ].map(action => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.page}
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setActivePage(action.page)}
+                    style={{ justifyContent: 'flex-start', gap: '0.625rem' }}
+                  >
+                    <Icon size={16} className="text-muted" />
+                    <span>{action.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

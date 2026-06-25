@@ -1,27 +1,40 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { mockStudents, mockHalaqat } from '../data/mockData.js';
 import { getSurahName } from '../data/quranData.js';
-import { Search, Plus, Filter, Edit2, Archive, Eye, X } from 'lucide-react';
+import ProgressMap from '../components/ProgressMap.jsx';
+import { Search, Plus, Edit2, Archive, Eye, X, Users, Trash2, Download } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 const STATUS_COLORS = {
   active: 'active', paused: 'paused', graduated: 'graduated', archived: 'archived'
 };
 
-function AddStudentModal({ onClose, onSave }) {
-  const { t, lang, showToast } = useApp();
+function StudentFormModal({ student, onClose, onSave }) {
+  const { t, lang, showToast, dbData } = useApp();
   const [form, setForm] = useState({
-    fullName: '', fullNameEn: '', dateOfBirth: '', gender: 'male',
-    phone: '', halaqaId: '', status: 'active', enrollmentDate: new Date().toISOString().split('T')[0], notes: '',
+    fullName: student?.fullName || '', 
+    fullNameEn: student?.fullNameEn || '', 
+    dateOfBirth: student?.dateOfBirth || '', 
+    gender: student?.gender || 'male',
+    phone: student?.phone || '', 
+    halaqaId: student?.halaqaId || '', 
+    status: student?.status || 'active', 
+    enrollmentDate: student?.enrollmentDate || new Date().toISOString().split('T')[0], 
+    notes: student?.notes || '',
   });
+
+  const [loading, setLoading] = useState(false);
 
   const handle = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!form.fullName || !form.halaqaId) return;
-    onSave(form);
-    showToast(t('success'));
+    if (!form.fullName) return;
+    setLoading(true);
+    await onSave(student ? { ...student, ...form } : form);
+    setLoading(false);
     onClose();
   };
 
@@ -29,7 +42,9 @@ function AddStudentModal({ onClose, onSave }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <h2 className="text-subtitle font-semibold">{t('addNewStudent')}</h2>
+          <h2 className="text-subtitle font-semibold">
+            {student ? (lang === 'ar' ? 'تعديل بيانات الطالب' : 'Edit Student') : t('addNewStudent')}
+          </h2>
           <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}><X size={16} /></button>
         </div>
         <form onSubmit={submit}>
@@ -62,15 +77,6 @@ function AddStudentModal({ onClose, onSave }) {
                 <label className="input-label">{t('phone')}</label>
                 <input className="input" value={form.phone} onChange={e => handle('phone', e.target.value)} />
               </div>
-              <div className="input-group">
-                <label className="input-label">{t('halaqa')} *</label>
-                <select className="select" value={form.halaqaId} onChange={e => handle('halaqaId', e.target.value)} required>
-                  <option value="">{t('selectHalaqa')}</option>
-                  {mockHalaqat.map(h => (
-                    <option key={h.id} value={h.id}>{lang === 'ar' ? h.name : h.nameEn}</option>
-                  ))}
-                </select>
-              </div>
             </div>
             <div className="grid-2">
               <div className="input-group">
@@ -92,8 +98,8 @@ function AddStudentModal({ onClose, onSave }) {
             </div>
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
-            <button type="submit" className="btn btn-primary">{t('save')}</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>{t('cancel')}</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? t('loading') : t('save')}</button>
           </div>
         </form>
       </div>
@@ -102,10 +108,9 @@ function AddStudentModal({ onClose, onSave }) {
 }
 
 function StudentProfileModal({ student, onClose }) {
-  const { t, lang, setActivePage } = useApp();
+  const { t, lang } = useApp();
   if (!student) return null;
 
-  const juzGrid = Array.from({ length: 30 }, (_, i) => i + 1);
   const pct = Math.round((student.totalAyahMemorized / 6236) * 100);
 
   return (
@@ -173,27 +178,8 @@ function StudentProfileModal({ student, onClose }) {
             </div>
           </div>
 
-          {/* Juz Map */}
-          <div>
-            <div className="text-small font-semibold" style={{ marginBottom: '0.75rem' }}>
-              🗺️ {t('juzMap')}
-            </div>
-            <div className="juz-map">
-              {juzGrid.map(j => {
-                const completed = student.juzCompleted.includes(j);
-                return (
-                  <div
-                    key={j}
-                    className={`juz-cell ${completed ? 'completed' : 'empty'}`}
-                    title={`${t('juz')} ${j}`}
-                  >
-                    <span style={{ fontSize: '0.6rem' }}>{lang === 'ar' ? 'ج' : 'J'}</span>
-                    <span>{j}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Progress Map (Juz / Hizb / Thumn) */}
+          <ProgressMap student={student} title={`🗺️ ${t('juzMap')}`} />
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
@@ -204,53 +190,131 @@ function StudentProfileModal({ student, onClose }) {
 }
 
 export default function StudentsPage() {
-  const { t, lang, currentUser, showToast } = useApp();
+  const { t, lang, currentUser, showToast, dbData, addStudentFn, updateStudentFn, deleteStudentFn } = useApp();
   const isAdmin = currentUser?.role === 'admin';
 
-  const [students, setStudents] = useState(
-    isAdmin ? mockStudents : mockStudents.filter(s => s.sheikhId === currentUser?.id)
-  );
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterHalaqa, setFilterHalaqa] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editStudent, setEditStudent] = useState(null);
   const [profileStudent, setProfileStudent] = useState(null);
 
-  const filtered = students.filter(s => {
-    const matchSearch = s.fullName.includes(search) || (s.fullNameEn || '').toLowerCase().includes(search.toLowerCase());
+  // Read directly from global dbData — NO local copy
+  const allStudents = (dbData?.students || []).filter(s =>
+    isAdmin ? true : s.sheikhId === currentUser?.id
+  );
+
+  const filtered = allStudents.filter(s => {
+    const nameAr = String(s.fullName || '');
+    const nameEn = String(s.fullNameEn || '');
+    const matchSearch = nameAr.toLowerCase().includes(search.toLowerCase()) ||
+                        nameEn.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || s.status === filterStatus;
-    const matchHalaqa = filterHalaqa === 'all' || s.halaqaId === filterHalaqa;
-    return matchSearch && matchStatus && matchHalaqa;
+    return matchSearch && matchStatus;
   });
 
-  const handleAdd = (data) => {
-    const halaqa = mockHalaqat.find(h => h.id === data.halaqaId);
-    const newStudent = {
-      id: `stu-${Date.now()}`,
-      sheikhId: currentUser.id,
-      fullName: data.fullName,
-      fullNameEn: data.fullNameEn,
-      dateOfBirth: data.dateOfBirth,
-      gender: data.gender,
-      phone: data.phone,
-      halaqaId: data.halaqaId,
-      status: data.status,
-      enrollmentDate: data.enrollmentDate,
-      notes: data.notes,
-      currentSurah: 1, currentAyah: 1,
-      totalAyahMemorized: 0,
-      juzCompleted: [],
-      attendancePct: 0,
-    };
-    setStudents(prev => [newStudent, ...prev]);
+  // Save: calls context which updates dbData globally → all pages re-render
+  const handleSave = async (data) => {
+    try {
+      if (editStudent) {
+        await updateStudentFn(editStudent.id, data, currentUser);
+        showToast(lang === 'ar' ? 'تم التعديل بنجاح' : 'Updated successfully');
+      } else {
+        await addStudentFn(data, currentUser);
+        showToast(lang === 'ar' ? 'تمت الإضافة بنجاح' : 'Student added successfully');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      showToast(`خطأ: ${err.message}`, 'error');
+    }
   };
 
-  const handleArchive = (id) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, status: 'archived' } : s));
-    showToast(lang === 'ar' ? 'تمت الأرشفة' : 'Archived successfully');
+  const handleArchive = async (id) => {
+    try {
+      await updateStudentFn(id, { ...allStudents.find(s => s.id === id), status: 'archived' }, currentUser);
+      showToast(lang === 'ar' ? 'تمت الأرشفة بنجاح' : 'Archived successfully');
+    } catch (err) {
+      showToast(`خطأ: ${err.message}`, 'error');
+    }
   };
 
-  const halaqaList = mockHalaqat.filter(h =>
+  const handleDelete = async (id) => {
+    if (window.confirm(lang === 'ar' ? 'هل أنت متأكد من حذف هذا الطالب نهائياً؟' : 'Permanently delete this student?')) {
+      try {
+        await deleteStudentFn(id);
+        showToast(lang === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully');
+      } catch (err) {
+        console.error('Delete error:', err);
+        showToast(`خطأ في الحذف: ${err.message}`, 'error');
+      }
+    }
+  };
+
+  const handleExport = (format) => {
+    try {
+      const head = ['ID', 'Name', 'Name (EN)', 'Surah', 'Ayah', 'Total Ayahs', 'Status'];
+      const body = filtered.map(s => [
+        s.id, s.fullName, s.fullNameEn || '', 
+        getSurahName(s.currentSurah, lang), s.currentAyah, 
+        s.totalAyahMemorized, s.status
+      ]);
+
+      const fileName = `students_list_${new Date().toISOString().split('T')[0]}`;
+      const isNative = Capacitor.isNativePlatform();
+
+      const saveNativeFile = async (dataBase64, filename) => {
+        try {
+          const result = await Filesystem.writeFile({
+            path: filename,
+            data: dataBase64,
+            directory: Directory.Cache,
+          });
+          await Share.share({
+            title: filename,
+            url: result.uri,
+            dialogTitle: lang === 'ar' ? 'حفظ أو مشاركة القائمة' : 'Save or Share List',
+          });
+        } catch (e) {
+          showToast(lang === 'ar' ? 'فشل حفظ الملف' : 'Failed to save file on device', 'error');
+        }
+      };
+
+      if (format === 'CSV') {
+        let csvContent = head.join(',') + '\n' + body.map(row => row.join(',')).join('\n');
+        if (isNative) {
+          const bom = "\uFEFF";
+          const base64 = btoa(unescape(encodeURIComponent(bom + csvContent)));
+          saveNativeFile(base64, fileName + '.csv');
+        } else {
+          const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+          const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = fileName + '.csv';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } else if (format === 'EXCEL') {
+        import('xlsx').then((XLSX) => {
+          const ws = XLSX.utils.aoa_to_sheet([head, ...body]);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Students");
+          if (isNative) {
+            const base64 = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+            saveNativeFile(base64, fileName + '.xlsx');
+          } else {
+            XLSX.writeFile(wb, fileName + '.xlsx');
+          }
+        });
+      }
+    } catch (err) {
+      showToast(lang === 'ar' ? 'فشل التصدير' : 'Export failed', 'error');
+    }
+  };
+
+  const halaqaList = (dbData?.halaqat || []).filter(h =>
     isAdmin || h.sheikhId === currentUser?.id
   );
 
@@ -261,13 +325,21 @@ export default function StudentsPage() {
         <div>
           <h1 className="text-title font-bold">{t('students')}</h1>
           <p className="text-small text-secondary">
-            {filtered.length} {lang === 'ar' ? 'طالب' : 'students'}
+            {allStudents.length} {lang === 'ar' ? 'طالب إجمالاً' : 'total students'} · {filtered.length} {lang === 'ar' ? 'معروض' : 'shown'}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowAddModal(true)} id="btn-add-student">
-          <Plus size={16} />
-          {t('addNewStudent')}
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-icon" onClick={() => handleExport('CSV')} title="CSV">
+            <Download size={16} /> <span className="text-xs">CSV</span>
+          </button>
+          <button className="btn btn-secondary btn-icon" onClick={() => handleExport('EXCEL')} title="Excel">
+            <Download size={16} /> <span className="text-xs">XLS</span>
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)} id="btn-add-student">
+            <Plus size={16} />
+            <span className="hide-on-mobile">{t('addNewStudent')}</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -297,19 +369,6 @@ export default function StudentsPage() {
           <option value="graduated">{t('graduated')}</option>
           <option value="archived">{t('archived')}</option>
         </select>
-        {halaqaList.length > 1 && (
-          <select
-            className="select"
-            value={filterHalaqa}
-            onChange={e => setFilterHalaqa(e.target.value)}
-            style={{ width: 'auto', minWidth: 140 }}
-          >
-            <option value="all">{t('allHalaqat')}</option>
-            {halaqaList.map(h => (
-              <option key={h.id} value={h.id}>{lang === 'ar' ? h.name : h.nameEn}</option>
-            ))}
-          </select>
-        )}
       </div>
 
       {/* Table */}
@@ -321,11 +380,10 @@ export default function StudentsPage() {
         </div>
       ) : (
         <div className="table-container">
-          <table>
+          <table className="responsive-table">
             <thead>
               <tr>
                 <th>{t('studentName')}</th>
-                <th>{t('halaqa')}</th>
                 <th>{t('currentPosition')}</th>
                 <th>{t('totalAyahMemorized')}</th>
                 <th>{t('attendancePercentage')}</th>
@@ -335,11 +393,11 @@ export default function StudentsPage() {
             </thead>
             <tbody>
               {filtered.map(student => {
-                const halaqa = mockHalaqat.find(h => h.id === student.halaqaId);
+                const halaqa = (dbData?.halaqat || []).find(h => h.id === student.halaqaId);
                 const pct = Math.round((student.totalAyahMemorized / 6236) * 100);
                 return (
                   <tr key={student.id}>
-                    <td>
+                    <td data-label={t('studentName')}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <div className="avatar avatar-sm">{student.fullName[0]}</div>
                         <div>
@@ -348,17 +406,12 @@ export default function StudentsPage() {
                         </div>
                       </div>
                     </td>
-                    <td>
-                      <span className="text-small">
-                        {halaqa ? (lang === 'ar' ? halaqa.name : halaqa.nameEn) : '—'}
-                      </span>
-                    </td>
-                    <td>
+                    <td data-label={t('currentPosition')}>
                       <span className="text-small">
                         {getSurahName(student.currentSurah, lang)}: {student.currentAyah}
                       </span>
                     </td>
-                    <td>
+                    <td data-label={t('totalAyahMemorized')}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <div style={{ width: 60 }}>
                           <div className="progress-bar-container">
@@ -368,15 +421,15 @@ export default function StudentsPage() {
                         <span className="text-xs font-semibold">{student.totalAyahMemorized}</span>
                       </div>
                     </td>
-                    <td>
+                    <td data-label={t('attendancePercentage')}>
                       <span className={`text-small font-semibold ${student.attendancePct >= 80 ? 'text-success' : 'text-error'}`}>
                         {student.attendancePct}%
                       </span>
                     </td>
-                    <td>
+                    <td data-label={t('status')}>
                       <span className={`badge badge-${student.status}`}>{t(student.status)}</span>
                     </td>
-                    <td>
+                    <td data-label={t('actions')}>
                       <div style={{ display: 'flex', gap: '0.25rem' }}>
                         <button
                           className="btn btn-ghost btn-icon btn-sm"
@@ -387,6 +440,7 @@ export default function StudentsPage() {
                         </button>
                         <button
                           className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => setEditStudent(student)}
                           title={t('edit')}
                         >
                           <Edit2 size={14} />
@@ -401,6 +455,14 @@ export default function StudentsPage() {
                             <Archive size={14} />
                           </button>
                         )}
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => handleDelete(student.id)}
+                          title={lang === 'ar' ? 'حذف' : 'Delete'}
+                          style={{ color: 'var(--error)' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -411,8 +473,12 @@ export default function StudentsPage() {
         </div>
       )}
 
-      {showAddModal && (
-        <AddStudentModal onClose={() => setShowAddModal(false)} onSave={handleAdd} />
+      {(showAddModal || editStudent) && (
+        <StudentFormModal 
+          student={editStudent}
+          onClose={() => { setShowAddModal(false); setEditStudent(null); }} 
+          onSave={handleSave} 
+        />
       )}
       {profileStudent && (
         <StudentProfileModal student={profileStudent} onClose={() => setProfileStudent(null)} />

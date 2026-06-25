@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">حِفْظِي</string>
+    <string name="title_activity_main">حِفْظِي</string>
+    <string name="package_name">com.hifdhi.app</string>
+    <string name="custom_url_scheme">com.hifdhi.app</string>
+</resources>

@@ -1,10 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { mockStudents, mockMatnProgress } from '../data/mockData.js';
 import { MATN_TYPES } from '../data/quranData.js';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, ScrollText, MessageSquare, Trash2 } from 'lucide-react';
 
-function MatnCard({ progress, student, lang, t }) {
+// Matn progress has no Supabase table, so it is persisted locally on the device.
+const MATN_STORAGE_KEY = 'hifz_matn_progress';
+const loadMatnProgress = () => {
+  try {
+    const raw = localStorage.getItem(MATN_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+function MatnCard({ progress, student, lang, onDelete }) {
   const matnInfo = MATN_TYPES.find(m => m.key === progress.matnType);
   const pct = progress.progressPct;
   const color = pct >= 80 ? '#10B981' : pct >= 50 ? '#F59E0B' : '#EF4444';
@@ -17,7 +27,7 @@ function MatnCard({ progress, student, lang, t }) {
           background: 'linear-gradient(135deg, #1E293B, #0F172A)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#D4AF37', fontSize: '1.1rem', flexShrink: 0,
-        }}>📜</div>
+        }}><ScrollText size={20} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="text-small font-bold">
             {lang === 'ar' ? matnInfo?.nameAr : matnInfo?.nameEn}
@@ -30,6 +40,10 @@ function MatnCard({ progress, student, lang, t }) {
         }}>
           {pct}%
         </div>
+        <button className="btn btn-ghost btn-icon btn-sm" onClick={() => onDelete(progress.id)}
+          title={lang === 'ar' ? 'حذف' : 'Delete'} style={{ color: 'var(--error)', flexShrink: 0 }}>
+          <Trash2 size={14} />
+        </button>
       </div>
 
       <div>
@@ -45,7 +59,7 @@ function MatnCard({ progress, student, lang, t }) {
         <p className="text-xs text-secondary" style={{
           background: 'var(--bg-input)', borderRadius: 8, padding: '0.5rem 0.625rem',
         }}>
-          💬 {progress.notes}
+          <MessageSquare size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginInlineEnd: 4 }} />{progress.notes}
         </p>
       )}
     </div>
@@ -56,7 +70,7 @@ function AddMatnModal({ students, onClose, onSave }) {
   const { t, lang } = useApp();
   const [form, setForm] = useState({
     studentId: students[0]?.id || '',
-    matnType: 'tuhfat',
+    matnType: 'bayquniyyah',
     chapter: '',
     progressPct: 0,
     notes: '',
@@ -111,15 +125,29 @@ function AddMatnModal({ students, onClose, onSave }) {
 }
 
 export default function MatnPage() {
-  const { t, lang, currentUser, showToast } = useApp();
-  const myStudents = mockStudents.filter(
+  const { t, lang, currentUser, showToast, dbData } = useApp();
+  const safeStudent = (s) => ({
+    ...s,
+    fullName: s.fullName || 'بدون اسم',
+  });
+
+  const myStudents = (dbData?.students || []).filter(
     s => currentUser?.role === 'admin' || s.sheikhId === currentUser?.id
-  );
-  const [progressList, setProgressList] = useState([...mockMatnProgress]);
+  ).map(safeStudent);
+  const [progressList, setProgressList] = useState(loadMatnProgress);
   const [showModal, setShowModal] = useState(false);
   const [filterType, setFilterType] = useState('all');
 
+  // Persist to localStorage whenever the list changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(MATN_STORAGE_KEY, JSON.stringify(progressList));
+    } catch { /* ignore quota / serialization errors */ }
+  }, [progressList]);
+
   const filtered = filterType === 'all' ? progressList : progressList.filter(p => p.matnType === filterType);
+
+  const deleteMatn = (id) => setProgressList(prev => prev.filter(p => p.id !== id));
 
   return (
     <div className="page-body">
@@ -156,7 +184,7 @@ export default function MatnPage() {
 
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📜</div>
+          <div className="empty-state-icon"><ScrollText size={28} /></div>
           <div className="text-subtitle">{t('noData')}</div>
         </div>
       ) : (
@@ -165,7 +193,7 @@ export default function MatnPage() {
             <MatnCard
               key={p.id} progress={p}
               student={myStudents.find(s => s.id === p.studentId)}
-              lang={lang} t={t}
+              lang={lang} onDelete={deleteMatn}
             />
           ))}
         </div>

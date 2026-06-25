@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { mockStudents, mockRevisions } from '../data/mockData.js';
 import { getSurahName } from '../data/quranData.js';
-import { Plus, X, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
+import { supabase } from '../lib/supabase.js';
+import { CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
 
 const STATUS_CONFIG = {
   completed: { icon: CheckCircle, color: '#10B981', bg: '#ECFDF5', label: 'completed' },
@@ -12,15 +12,38 @@ const STATUS_CONFIG = {
 };
 
 export default function MurajahPage() {
-  const { t, lang, currentUser, showToast } = useApp();
+  const { t, lang, currentUser, showToast, dbData } = useApp();
   const isAdmin = currentUser?.role === 'admin';
-  const myStudents = isAdmin
-    ? mockStudents
-    : mockStudents.filter(s => s.sheikhId === currentUser?.id && s.status === 'active');
+  const safeStudent = (s) => ({
+    ...s,
+    fullName: s.fullName || 'بدون اسم',
+  });
 
-  const [revisions, setRevisions] = useState([...mockRevisions]);
+  const myStudents = (isAdmin
+    ? (dbData?.students || [])
+    : (dbData?.students || []).filter(s => s.sheikhId === currentUser?.id && s.status === 'active')
+  ).map(safeStudent);
+
   const [filter, setFilter] = useState('all');
   const [selectedStudentId, setSelectedStudentId] = useState('all');
+
+  // Use real sessions from dbData — muraja3ah type
+  const myStudentIds = new Set(myStudents.map(s => s.id));
+  const revisions = (dbData?.sessions || []).filter(s =>
+    (s.type === 'muraja3ah' || s.type === 'revision') &&
+    myStudentIds.has(s.studentId || s.student_id)
+  ).map(s => ({
+    id: s.id,
+    studentId: s.studentId || s.student_id,
+    date: s.date,
+    fromSurah: s.fromSurah || s.from_surah,
+    fromAyah: s.fromAyah || s.from_ayah,
+    toSurah: s.toSurah || s.to_surah,
+    toAyah: s.toAyah || s.to_ayah,
+    qualityRating: s.qualityRating || s.quality_rating || s.rating,
+    status: s.status || 'completed',
+    notes: s.notes,
+  }));
 
   const filtered = revisions.filter(r => {
     const matchStatus = filter === 'all' || r.status === filter;
@@ -28,9 +51,14 @@ export default function MurajahPage() {
     return matchStatus && matchStudent;
   });
 
-  const updateStatus = (id, status) => {
-    setRevisions(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-    showToast(t('success'));
+  const updateStatus = async (id, status) => {
+    try {
+      const { error } = await supabase.from('sessions').update({ status }).eq('id', id);
+      if (error) throw error;
+      showToast(lang === 'ar' ? 'تم تحديث حالة المراجعة' : 'Revision status updated');
+    } catch (err) {
+      showToast(`خطأ: ${err.message}`, 'error');
+    }
   };
 
   const counts = {
@@ -151,21 +179,21 @@ export default function MurajahPage() {
                       style={{ background: '#ECFDF5', color: '#065F46', fontWeight: 700 }}
                       onClick={() => updateStatus(rev.id, 'completed')}
                     >
-                      ✅ {t('completed')}
+                      <CheckCircle size={14} style={{ display: 'inline' }} /> {t('completed')}
                     </button>
                     <button
                       className="btn btn-sm"
                       style={{ background: '#FFF7ED', color: '#C2410C', fontWeight: 700 }}
                       onClick={() => updateStatus(rev.id, 'partial')}
                     >
-                      ⚡ {t('partial')}
+                      <AlertTriangle size={14} style={{ display: 'inline' }} /> {t('partial')}
                     </button>
                     <button
                       className="btn btn-sm"
                       style={{ background: '#FEF2F2', color: '#991B1B', fontWeight: 700 }}
                       onClick={() => updateStatus(rev.id, 'missed')}
                     >
-                      ❌ {t('missed')}
+                      <XCircle size={14} style={{ display: 'inline' }} /> {t('missed')}
                     </button>
                   </div>
                 )}

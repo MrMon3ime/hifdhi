@@ -1,347 +1,45 @@
-// Mock data store — simulates a real database
+// Mock data store — fallback defaults. Real data always comes from Supabase.
 import { SURAHS } from './quranData.js';
 
+// Minimal fallback users (match Supabase IDs)
 export const mockUsers = [
   {
-    id: 'admin-1',
+    id: '11111111-1111-1111-1111-111111111111',
     role: 'admin',
-    fullName: 'أحمد المدير',
-    fullNameEn: 'Ahmed Al-Admin',
+    fullName: 'أرسلان المدير',
     email: 'admin@hifdhi.com',
-    password: 'admin123',
-    avatar: null,
+    password: 'ahmed2005',
   },
   {
-    id: 'sheikh-1',
+    id: '22222222-2222-2222-2222-222222222222',
     role: 'sheikh',
-    fullName: 'الشيخ عبدالله الحسن',
-    fullNameEn: 'Sheikh Abdullah Al-Hassan',
+    fullName: 'الشيخ الأول',
     email: 'sheikh@hifdhi.com',
-    password: 'sheikh123',
-    avatar: null,
-    halaqatIds: ['halaqa-1', 'halaqa-2'],
-  },
-  {
-    id: 'sheikh-2',
-    role: 'sheikh',
-    fullName: 'الشيخ محمد العمري',
-    fullNameEn: 'Sheikh Mohammed Al-Omari',
-    email: 'sheikh2@hifdhi.com',
-    password: 'sheikh123',
-    avatar: null,
-    halaqatIds: ['halaqa-3'],
+    password: 'sheikh2024',
   },
 ];
 
-export const mockHalaqat = [
-  {
-    id: 'halaqa-1',
-    name: 'حلقة الفجر',
-    nameEn: 'Fajr Circle',
-    sheikhId: 'sheikh-1',
-    sheikhName: 'الشيخ عبدالله الحسن',
-    location: 'مسجد الرحمة',
-    schedule: ['الأحد', 'الثلاثاء', 'الخميس'],
-    startTime: '06:00',
-    endTime: '07:30',
-    studentCount: 8,
-    isActive: true,
-  },
-  {
-    id: 'halaqa-2',
-    name: 'حلقة العصر',
-    nameEn: 'Asr Circle',
-    sheikhId: 'sheikh-1',
-    sheikhName: 'الشيخ عبدالله الحسن',
-    location: 'مركز التحفيظ',
-    schedule: ['الاثنين', 'الأربعاء'],
-    startTime: '16:00',
-    endTime: '17:30',
-    studentCount: 6,
-    isActive: true,
-  },
-  {
-    id: 'halaqa-3',
-    name: 'حلقة المساء',
-    nameEn: 'Evening Circle',
-    sheikhId: 'sheikh-2',
-    sheikhName: 'الشيخ محمد العمري',
-    location: 'مسجد النور',
-    schedule: ['السبت', 'الأحد'],
-    startTime: '20:00',
-    endTime: '21:30',
-    studentCount: 10,
-    isActive: true,
-  },
-];
+export const mockHalaqat    = [];
+export const mockStudents   = [];
+export const mockAttendance = [];
+export const mockSessions   = [];
+export const mockRevisions  = [];
+export const mockMatnProgress = [];
 
-export const mockStudents = [
-  {
-    id: 'stu-1',
-    halaqaId: 'halaqa-1',
-    sheikhId: 'sheikh-1',
-    fullName: 'عمر بن خالد',
-    fullNameEn: 'Omar bin Khalid',
-    dateOfBirth: '2010-03-15',
-    gender: 'male',
-    phone: '0512345678',
-    status: 'active',
-    enrollmentDate: '2023-09-01',
-    notes: 'طالب متميز ومجتهد',
-    currentSurah: 18,
-    currentAyah: 45,
-    totalAyahMemorized: 1240,
-    juzCompleted: [30, 29, 28],
-    attendancePct: 92,
-  },
-  {
-    id: 'stu-2',
-    halaqaId: 'halaqa-1',
-    sheikhId: 'sheikh-1',
-    fullName: 'يوسف المحمد',
-    fullNameEn: 'Youssef Al-Mohammed',
-    dateOfBirth: '2011-07-22',
-    gender: 'male',
-    phone: '0598765432',
-    status: 'active',
-    enrollmentDate: '2023-09-01',
-    notes: '',
-    currentSurah: 36,
-    currentAyah: 20,
-    totalAyahMemorized: 890,
-    juzCompleted: [30, 29],
-    attendancePct: 85,
-  },
-  {
-    id: 'stu-3',
-    halaqaId: 'halaqa-1',
-    sheikhId: 'sheikh-1',
-    fullName: 'عبدالرحمن سالم',
-    fullNameEn: 'Abdurrahman Salem',
-    dateOfBirth: '2009-11-05',
-    gender: 'male',
-    phone: '0567890123',
-    status: 'active',
-    enrollmentDate: '2022-01-10',
-    notes: 'حافظ للجزء الأخير',
-    currentSurah: 2,
-    currentAyah: 255,
-    totalAyahMemorized: 2150,
-    juzCompleted: [30, 29, 28, 27, 26, 25],
-    attendancePct: 97,
-  },
-  {
-    id: 'stu-4',
-    halaqaId: 'halaqa-2',
-    sheikhId: 'sheikh-1',
-    fullName: 'إبراهيم الشمري',
-    fullNameEn: 'Ibrahim Al-Shammari',
-    dateOfBirth: '2012-04-18',
-    gender: 'male',
-    phone: '0534567890',
-    status: 'active',
-    enrollmentDate: '2024-01-15',
-    notes: '',
-    currentSurah: 87,
-    currentAyah: 10,
-    totalAyahMemorized: 450,
-    juzCompleted: [30],
-    attendancePct: 78,
-  },
-  {
-    id: 'stu-5',
-    halaqaId: 'halaqa-2',
-    sheikhId: 'sheikh-1',
-    fullName: 'محمد العتيبي',
-    fullNameEn: 'Mohammed Al-Otaibi',
-    dateOfBirth: '2010-08-30',
-    gender: 'male',
-    phone: '0523456789',
-    status: 'paused',
-    enrollmentDate: '2023-06-01',
-    notes: 'موقوف مؤقتًا لأسباب صحية',
-    currentSurah: 67,
-    currentAyah: 15,
-    totalAyahMemorized: 700,
-    juzCompleted: [30, 29, 28],
-    attendancePct: 60,
-  },
-  {
-    id: 'stu-6',
-    halaqaId: 'halaqa-1',
-    sheikhId: 'sheikh-1',
-    fullName: 'سعد القحطاني',
-    fullNameEn: 'Saad Al-Qahtani',
-    dateOfBirth: '2008-12-01',
-    gender: 'male',
-    phone: '0545678901',
-    status: 'graduated',
-    enrollmentDate: '2020-09-01',
-    notes: 'تخرج بامتياز - حافظ للقرآن الكريم',
-    currentSurah: 1,
-    currentAyah: 1,
-    totalAyahMemorized: 6236,
-    juzCompleted: Array.from({length: 30}, (_, i) => i + 1),
-    attendancePct: 99,
-  },
-  {
-    id: 'stu-7',
-    halaqaId: 'halaqa-3',
-    sheikhId: 'sheikh-2',
-    fullName: 'فيصل الدوسري',
-    fullNameEn: 'Faisal Al-Dosari',
-    dateOfBirth: '2011-02-14',
-    gender: 'male',
-    phone: '0556789012',
-    status: 'active',
-    enrollmentDate: '2024-03-01',
-    notes: '',
-    currentSurah: 78,
-    currentAyah: 30,
-    totalAyahMemorized: 380,
-    juzCompleted: [30],
-    attendancePct: 88,
-  },
-  {
-    id: 'stu-8',
-    halaqaId: 'halaqa-3',
-    sheikhId: 'sheikh-2',
-    fullName: 'خالد الزهراني',
-    fullNameEn: 'Khalid Al-Zahrani',
-    dateOfBirth: '2013-06-20',
-    gender: 'male',
-    phone: '0567891234',
-    status: 'active',
-    enrollmentDate: '2024-09-01',
-    notes: 'طالب جديد، متحمس للتعلم',
-    currentSurah: 114,
-    currentAyah: 6,
-    totalAyahMemorized: 95,
-    juzCompleted: [],
-    attendancePct: 95,
-  },
-];
-
-// Generate attendance for current week
-const today = new Date();
-const todayStr = today.toISOString().split('T')[0];
-
-export const mockAttendance = [
-  { id: 'att-1', studentId: 'stu-1', halaqaId: 'halaqa-1', date: todayStr, status: 'present' },
-  { id: 'att-2', studentId: 'stu-2', halaqaId: 'halaqa-1', date: todayStr, status: 'present' },
-  { id: 'att-3', studentId: 'stu-3', halaqaId: 'halaqa-1', date: todayStr, status: 'late' },
-  { id: 'att-4', studentId: 'stu-6', halaqaId: 'halaqa-1', date: todayStr, status: 'present' },
-];
-
-export const mockSessions = [
-  {
-    id: 'ses-1',
-    studentId: 'stu-1',
-    sheikhId: 'sheikh-1',
-    date: todayStr,
-    fromSurah: 18, fromAyah: 40,
-    toSurah: 18,   toAyah: 45,
-    ayahCount: 6,
-    qualityRating: 4,
-    notes: 'أداء ممتاز مع تجويد صحيح',
-    type: 'new',
-  },
-  {
-    id: 'ses-2',
-    studentId: 'stu-2',
-    sheikhId: 'sheikh-1',
-    date: todayStr,
-    fromSurah: 36, fromAyah: 15,
-    toSurah: 36,   toAyah: 20,
-    ayahCount: 6,
-    qualityRating: 3,
-    notes: 'يحتاج تحسين في المخارج',
-    type: 'new',
-  },
-  {
-    id: 'ses-3',
-    studentId: 'stu-3',
-    sheikhId: 'sheikh-1',
-    date: todayStr,
-    fromSurah: 2, fromAyah: 245,
-    toSurah: 2,   toAyah: 255,
-    ayahCount: 11,
-    qualityRating: 5,
-    notes: 'سبحان الله، حفظ رائع',
-    type: 'new',
-  },
-];
-
-export const mockRevisions = [
-  {
-    id: 'rev-1',
-    studentId: 'stu-1',
-    planId: 'plan-1',
-    date: todayStr,
-    fromSurah: 30, fromAyah: 1,
-    toSurah: 30,   toAyah: 30,
-    status: 'completed',
-    qualityRating: 4,
-  },
-  {
-    id: 'rev-2',
-    studentId: 'stu-2',
-    planId: 'plan-2',
-    date: todayStr,
-    fromSurah: 29, fromAyah: 1,
-    toSurah: 29,   toAyah: 20,
-    status: 'pending',
-    qualityRating: null,
-  },
-  {
-    id: 'rev-3',
-    studentId: 'stu-3',
-    planId: 'plan-3',
-    date: todayStr,
-    fromSurah: 28, fromAyah: 1,
-    toSurah: 29,   toAyah: 46,
-    status: 'missed',
-    qualityRating: null,
-  },
-];
-
-export const mockMatnProgress = [
-  {
-    id: 'matn-1',
-    studentId: 'stu-1',
-    matnType: 'tuhfat',
-    chapter: 'باب المد والقصر',
-    progressPct: 75,
-    notes: 'يحفظ الأبيات بإتقان',
-  },
-  {
-    id: 'matn-2',
-    studentId: 'stu-3',
-    matnType: 'ajurrumiyyah',
-    chapter: 'باب المرفوعات',
-    progressPct: 90,
-    notes: '',
-  },
-];
-
-// Chart data
+// Chart helper stubs (kept to avoid broken imports in other files)
 export const generateWeeklyProgressData = (lang = 'ar') => {
   const days = lang === 'ar'
     ? ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return days.map((day, i) => ({
-    day,
-    verses: [12, 18, 8, 22, 15, 0, 10][i],
-    attendance: [8, 7, 8, 6, 8, 0, 5][i],
-  }));
+  return days.map(day => ({ day, verses: 0, attendance: 0 }));
 };
 
 export const generateMonthlyAttendanceData = (lang = 'ar') => {
-  return Array.from({length: 12}, (_, i) => ({
+  return Array.from({ length: 12 }, (_, i) => ({
     month: lang === 'ar'
       ? ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][i]
       : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
-    present: [88, 92, 85, 90, 78, 95, 88, 82, 90, 93, 87, 91][i],
-    absent:  [12,  8, 15, 10, 22,  5, 12, 18, 10,  7, 13,  9][i],
+    present: 0,
+    absent: 0,
   }));
 };

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { Sun, Moon, Monitor, Globe, User, Lock, ChevronRight } from 'lucide-react';
+import { Sun, Moon, Monitor, Globe, User, Lock, ChevronRight, BookOpen, X } from 'lucide-react';
+import { supabase } from '../lib/supabase.js';
 
 function SettingRow({ icon: Icon, label, children, desc }) {
   return (
@@ -24,8 +26,89 @@ function SettingRow({ icon: Icon, label, children, desc }) {
   );
 }
 
+function ChangePasswordModal({ onClose }) {
+  const { t, lang, currentUser, showToast } = useApp();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      showToast(lang === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match', 'error');
+      return;
+    }
+    
+    // In this MVP, we check the current password against what's saved in the users table
+    try {
+      setLoading(true);
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('password')
+        .eq('id', currentUser.id)
+        .single();
+        
+      if (fetchError || !data || data.password !== currentPassword) {
+        showToast(lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password is incorrect', 'error');
+        setLoading(false);
+        return;
+      }
+      
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ password: newPassword })
+        .eq('id', currentUser.id);
+        
+      if (updateError) throw updateError;
+      
+      showToast(lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
+      onClose();
+    } catch (err) {
+      console.error(err);
+      showToast(lang === 'ar' ? 'حدث خطأ أثناء تغيير كلمة المرور' : 'Error changing password', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div className="modal-header">
+          <h2 className="text-subtitle font-semibold">{t('changePassword')}</h2>
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}><X size={16} /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="input-group">
+              <label className="input-label">{lang === 'ar' ? 'كلمة المرور الحالية' : 'Current Password'} *</label>
+              <input type="password" className="input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
+            </div>
+            <div className="input-group">
+              <label className="input-label">{lang === 'ar' ? 'كلمة المرور الجديدة' : 'New Password'} *</label>
+              <input type="password" className="input" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">{lang === 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password'} *</label>
+              <input type="password" className="input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? t('loading') : t('save')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const { t, lang, setLang, themeMode, setThemeMode, currentUser, showToast } = useApp();
+  const { t, lang, setLang, themeMode, setThemeMode, currentUser, dbData } = useApp();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const themeOptions = [
     { value: 'light', label: t('lightMode'), icon: Sun },
@@ -156,7 +239,7 @@ export default function SettingsPage() {
           }}
           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
           onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          onClick={() => showToast(lang === 'ar' ? 'قريبًا' : 'Coming soon!')}
+          onClick={() => setShowPasswordModal(true)}
         >
           <div style={{
             width: 36, height: 36, borderRadius: 10,
@@ -175,13 +258,17 @@ export default function SettingsPage() {
 
       {/* App Info */}
       <div className="card card-sm" style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📖</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+          <img src="/logo.png" alt="Logo" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+        </div>
         <div className="text-small font-bold">{t('appName')}</div>
         <div className="text-xs text-muted">v1.0.0 · {lang === 'ar' ? 'المرحلة الأولى' : 'MVP Phase'}</div>
         <div className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>
           {lang === 'ar' ? 'بسم الله الرحمن الرحيم' : 'In the name of Allah, the Most Gracious'}
         </div>
       </div>
+      
+      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>
   );
 }
