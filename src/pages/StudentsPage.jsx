@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { getSurahName } from '../data/quranData.js';
+import { supabase } from '../lib/supabase.js';
 import ProgressMap from '../components/ProgressMap.jsx';
-import { Search, Plus, Edit2, Archive, Eye, X, Users, Trash2, Download } from 'lucide-react';
+import { printOrShareHtml, docStyles } from '../lib/docExport.js';
+import { Search, Plus, Edit2, Archive, Eye, X, Users, Trash2, Download, FileText, Award, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -177,10 +179,82 @@ function AttendanceCalendar({ studentId }) {
 }
 
 function StudentProfileModal({ student, onClose }) {
-  const { t, lang } = useApp();
+  const { t, lang, dbData } = useApp();
   if (!student) return null;
 
+  const L = (ar, en) => (lang === 'ar' ? ar : en);
   const pct = Math.round((student.totalAyahMemorized / 6236) * 100);
+  const juzDone = student.juzCompleted?.length || 0;
+
+  const myAtt = (dbData?.attendance || [])
+    .filter(a => (a.studentId || a.student_id) === student.id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  let streak = 0;
+  for (const a of myAtt) { if (a.status === 'present' || a.status === 'late') streak++; else break; }
+  const presentCount = myAtt.filter(a => a.status === 'present' || a.status === 'late').length;
+
+  const badges = [];
+  if (juzDone >= 30) badges.push({ icon: '🏅', label: L('ختم القرآن', "Completed Qur'an"), color: '#D4AF37' });
+  if (juzDone > 0) badges.push({ icon: '📖', label: `${juzDone} ${L('أجزاء', 'Juz')}`, color: '#0F766E' });
+  if (student.totalAyahMemorized >= 1000) badges.push({ icon: '⭐', label: L('+1000 آية', '1000+ ayahs'), color: '#7C3AED' });
+  else if (student.totalAyahMemorized >= 500) badges.push({ icon: '⭐', label: L('+500 آية', '500+ ayahs'), color: '#7C3AED' });
+  else if (student.totalAyahMemorized >= 100) badges.push({ icon: '⭐', label: L('+100 آية', '100+ ayahs'), color: '#7C3AED' });
+  if (streak >= 3) badges.push({ icon: '🔥', label: `${streak} ${L('حضور متتابع', 'streak')}`, color: '#EA580C' });
+  if (myAtt.length > 0 && student.attendancePct >= 90) badges.push({ icon: '✅', label: L('حضور ممتاز', 'Great attendance'), color: '#10B981' });
+
+  const studentSessions = (dbData?.sessions || [])
+    .filter(s => (s.studentId || s.student_id) === student.id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const printReportCard = () => {
+    const rows = studentSessions.slice(0, 10).map(s =>
+      `<tr><td>${s.date}</td><td>${getSurahName(s.fromSurah || s.from_surah, lang)} ${s.fromAyah || s.from_ayah}</td><td>${getSurahName(s.toSurah || s.to_surah, lang)} ${s.toAyah || s.to_ayah}</td><td>${s.type === 'new' ? L('حفظ', 'New') : L('مراجعة', 'Revision')}</td></tr>`
+    ).join('') || `<tr><td colspan="4">${L('لا توجد جلسات', 'No sessions')}</td></tr>`;
+    const html = `<!DOCTYPE html><html dir="${lang === 'ar' ? 'rtl' : 'ltr'}" lang="${lang}"><head><meta charset="utf-8"><title>${student.fullName}</title><style>${docStyles(lang === 'ar')}</style></head><body>
+      <h1>${L('بطاقة تقرير الطالب', 'Student Report Card')}</h1>
+      <div class="sub">${student.fullName}${student.fullNameEn ? ` · ${student.fullNameEn}` : ''} · ${new Date().toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US')}</div>
+      <div class="grid">
+        <div class="stat"><b>${pct}%</b><span>${L('نسبة الإنجاز', 'Progress')}</span></div>
+        <div class="stat"><b>${student.totalAyahMemorized}</b><span>${L('آيات محفوظة', 'Ayahs')}</span></div>
+        <div class="stat"><b>${juzDone}/30</b><span>${L('أجزاء', 'Juz')}</span></div>
+        <div class="stat"><b>${student.attendancePct}%</b><span>${L('الحضور', 'Attendance')}</span></div>
+      </div>
+      <table>
+        <tr><th>${L('الموقع الحالي', 'Current position')}</th><td>${getSurahName(student.currentSurah, lang)} — ${L('آية', 'Ayah')} ${student.currentAyah}</td></tr>
+        <tr><th>${L('سجل الحضور', 'Attendance records')}</th><td>${presentCount}/${myAtt.length} ${L('حاضر', 'present')}</td></tr>
+      </table>
+      <h3 style="color:#0F766E">${L('آخر الجلسات', 'Recent sessions')}</h3>
+      <table><thead><tr><th>${L('التاريخ', 'Date')}</th><th>${L('من', 'From')}</th><th>${L('إلى', 'To')}</th><th>${L('النوع', 'Type')}</th></tr></thead><tbody>${rows}</tbody></table>
+      </body></html>`;
+    printOrShareHtml(html, `report_${student.id}`, lang);
+  };
+
+  const printCertificate = () => {
+    const achievement = juzDone >= 30
+      ? L('أتمّ بحمد الله حفظ القرآن الكريم كاملاً', "has, by the grace of Allah, completed memorizing the entire Holy Qur'an")
+      : juzDone > 0
+        ? L(`أتمّ حفظ ${juzDone} ${juzDone === 1 ? 'جزء' : 'أجزاء'} من القرآن الكريم`, `has memorized ${juzDone} Juz of the Holy Qur'an`)
+        : L(`حفظ ${student.totalAyahMemorized} آية من القرآن الكريم`, `has memorized ${student.totalAyahMemorized} ayahs of the Holy Qur'an`);
+    const html = `<!DOCTYPE html><html dir="${lang === 'ar' ? 'rtl' : 'ltr'}" lang="${lang}"><head><meta charset="utf-8"><title>${L('شهادة', 'Certificate')}</title>
+      <style>@page{size:A4 landscape;margin:0} *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
+      body{margin:0;font-family:"Tahoma","Segoe UI",serif;direction:${lang === 'ar' ? 'rtl' : 'ltr'}}
+      .cert{height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0B3D3A,#0F766E)}
+      .inner{background:#fff;width:90%;height:86%;border:10px solid #D4AF37;border-radius:14px;padding:40px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:14px}
+      .bism{color:#0F766E;font-size:20px}
+      .ttl{color:#D4AF37;font-size:46px;font-weight:800;margin:6px 0}
+      .name{font-size:34px;font-weight:800;color:#0F172A;border-bottom:2px dashed #0F766E;display:inline-block;padding:4px 30px}
+      .ach{font-size:20px;color:#334155;max-width:680px;margin:0 auto;line-height:1.8}
+      .ft{display:flex;justify-content:space-between;margin-top:30px;font-size:13px;color:#64748B;padding:0 30px}</style></head>
+      <body><div class="cert"><div class="inner">
+        <div class="bism">﷽</div>
+        <div class="ttl">${L('شهادة تقدير', 'Certificate of Achievement')}</div>
+        <div>${L('تشهد إدارة حِفْظِي بأن الطالب', 'This certifies that')}</div>
+        <div class="name">${student.fullName}</div>
+        <div class="ach">${achievement}</div>
+        <div class="ft"><span>${L('التاريخ', 'Date')}: ${new Date().toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US')}</span><span>${L('حِفْظِي', 'Hifdhi')}</span></div>
+      </div></div></body></html>`;
+    printOrShareHtml(html, `certificate_${student.id}`, lang);
+  };
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -237,6 +311,20 @@ function StudentProfileModal({ student, onClose }) {
             ))}
           </div>
 
+          {/* Badges */}
+          {badges.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {badges.map((b, i) => (
+                <span key={i} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '0.35rem 0.7rem', borderRadius: 999,
+                  background: b.color + '22', color: b.color,
+                  fontSize: '0.75rem', fontWeight: 700, border: `1px solid ${b.color}55`,
+                }}>{b.icon} {b.label}</span>
+              ))}
+            </div>
+          )}
+
           {/* Current position */}
           <div style={{ background: 'var(--bg-input)', borderRadius: 10, padding: '0.875rem' }}>
             <div className="text-small font-semibold" style={{ marginBottom: '0.4rem' }}>
@@ -253,8 +341,14 @@ function StudentProfileModal({ student, onClose }) {
           {/* Day-by-day attendance calendar */}
           <AttendanceCalendar studentId={student.id} />
         </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
+        <div className="modal-footer" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+          <button className="btn btn-secondary" onClick={printReportCard} style={{ flex: '1 1 auto', justifyContent: 'center' }}>
+            <FileText size={15} /> {lang === 'ar' ? 'بطاقة التقرير' : 'Report Card'}
+          </button>
+          <button className="btn btn-secondary" onClick={printCertificate} style={{ flex: '1 1 auto', justifyContent: 'center', color: '#B45309', borderColor: '#FCD34D' }}>
+            <Award size={15} /> {lang === 'ar' ? 'شهادة' : 'Certificate'}
+          </button>
+          <button className="btn btn-primary" onClick={onClose} style={{ flex: '1 1 auto', justifyContent: 'center' }}>{t('close')}</button>
         </div>
       </div>
     </div>
@@ -262,7 +356,7 @@ function StudentProfileModal({ student, onClose }) {
 }
 
 export default function StudentsPage() {
-  const { t, lang, currentUser, showToast, dbData, addStudentFn, updateStudentFn, deleteStudentFn } = useApp();
+  const { t, lang, currentUser, showToast, dbData, addStudentFn, updateStudentFn, deleteStudentFn, refreshData } = useApp();
   const isAdmin = currentUser?.role === 'admin';
 
   const [search, setSearch] = useState('');
@@ -271,6 +365,50 @@ export default function StudentsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editStudent, setEditStudent] = useState(null);
   const [profileStudent, setProfileStudent] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Bulk import students from an Excel/CSV file (columns: name / nameEn / status).
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const L = (ar, en) => (lang === 'ar' ? ar : en);
+    try {
+      const XLSX = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf);
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      const pick = (r, keys) => {
+        for (const k of Object.keys(r)) if (keys.includes(k.toLowerCase().trim())) return r[k];
+        return '';
+      };
+      const payload = rows.map(r => {
+        const name = String(pick(r, ['name', 'fullname', 'full_name', 'الاسم', 'اسم', 'الاسم بالعربية']) || '').trim();
+        if (!name) return null;
+        const nameEn = String(pick(r, ['nameen', 'name_en', 'fullnameen', 'english', 'الاسم بالانجليزية']) || '').trim();
+        const status = String(pick(r, ['status', 'الحالة']) || 'active').toLowerCase();
+        return {
+          full_name: name,
+          full_name_en: nameEn || name,
+          status: ['active', 'paused', 'graduated', 'archived'].includes(status) ? status : 'active',
+          sheikh_id: currentUser?.id || null,
+        };
+      }).filter(Boolean);
+
+      if (!payload.length) {
+        showToast(L('لم يتم العثور على صفوف صالحة (عمود "name")', 'No valid rows found (need a "name" column)'), 'error');
+        return;
+      }
+      const { error } = await supabase.from('students').insert(payload);
+      if (error) throw error;
+      showToast(L(`تم استيراد ${payload.length} طالب`, `Imported ${payload.length} students`));
+      refreshData();
+    } catch (err) {
+      console.error(err);
+      showToast((lang === 'ar' ? 'فشل الاستيراد: ' : 'Import failed: ') + err.message, 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
 
   // Read directly from global dbData — NO local copy
   const allStudents = (dbData?.students || []).filter(s =>
@@ -406,6 +544,16 @@ export default function StudentsPage() {
           </button>
           <button className="btn btn-secondary btn-icon" onClick={() => handleExport('EXCEL')} title="Excel">
             <Download size={16} /> <span className="text-xs">XLS</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style={{ display: 'none' }}
+            onChange={handleImport}
+          />
+          <button className="btn btn-secondary btn-icon" onClick={() => fileInputRef.current?.click()} title={lang === 'ar' ? 'استيراد' : 'Import'}>
+            <Upload size={16} /> <span className="text-xs">{lang === 'ar' ? 'استيراد' : 'Import'}</span>
           </button>
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)} id="btn-add-student">
             <Plus size={16} />

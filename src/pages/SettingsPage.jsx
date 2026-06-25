@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { Sun, Moon, Monitor, Globe, User, Lock, ChevronRight, BookOpen, X } from 'lucide-react';
+import { Sun, Moon, Monitor, Globe, User, Lock, ChevronRight, X, Database } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { downloadOrShare } from '../lib/docExport.js';
 
 function SettingRow({ icon: Icon, label, children, desc }) {
   return (
@@ -107,14 +108,30 @@ function ChangePasswordModal({ onClose }) {
 }
 
 export default function SettingsPage() {
-  const { t, lang, setLang, themeMode, setThemeMode, currentUser, dbData } = useApp();
+  const { t, lang, setLang, themeMode, setThemeMode, currentUser, dbData, showToast } = useApp();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const isAdmin = currentUser?.role === 'admin';
 
   const themeOptions = [
     { value: 'light', label: t('lightMode'), icon: Sun },
     { value: 'dark',  label: t('darkMode'),  icon: Moon },
     { value: 'system',label: t('systemDefault'), icon: Monitor },
   ];
+
+  const exportBackup = () => {
+    const data = {
+      exportedAt: new Date().toISOString(),
+      app: 'Hifdhi',
+      students: dbData?.students || [],
+      halaqat: dbData?.halaqat || [],
+      attendance: dbData?.attendance || [],
+      sessions: dbData?.sessions || [],
+      users: (dbData?.users || []).map(({ password, ...u }) => u), // never export passwords
+    };
+    const stamp = new Date().toISOString().split('T')[0];
+    downloadOrShare(`hifdhi-backup-${stamp}.json`, JSON.stringify(data, null, 2), 'application/json', lang);
+    showToast(lang === 'ar' ? 'تم تجهيز النسخة الاحتياطية' : 'Backup ready');
+  };
 
   return (
     <div className="page-body" style={{ maxWidth: 680 }}>
@@ -255,6 +272,34 @@ export default function SettingsPage() {
           <ChevronRight size={16} style={{ color: 'var(--text-muted)', transform: lang === 'ar' ? 'rotate(180deg)' : 'none' }} />
         </button>
       </div>
+
+      {/* Data / Backup (admin) */}
+      {isAdmin && (
+        <div className="card" style={{ padding: 0, marginBottom: '1.25rem', overflow: 'hidden' }}>
+          <div style={{ padding: '0.875rem 1rem', background: 'var(--bg-input)', borderBottom: '1px solid var(--border)' }}>
+            <span className="text-xs font-semibold text-muted" style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {lang === 'ar' ? 'البيانات' : 'Data'}
+            </span>
+          </div>
+          <button
+            onClick={exportBackup}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem',
+              width: '100%', cursor: 'pointer', background: 'none', border: 'none',
+              textAlign: 'inherit', fontFamily: 'inherit',
+            }}
+          >
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--emerald)', flexShrink: 0 }}>
+              <Database size={16} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div className="text-small font-semibold">{lang === 'ar' ? 'نسخة احتياطية (JSON)' : 'Backup data (JSON)'}</div>
+              <div className="text-xs text-muted">{lang === 'ar' ? 'تصدير كل بيانات التطبيق إلى ملف' : 'Export all app data to a file'}</div>
+            </div>
+            <ChevronRight size={16} style={{ color: 'var(--text-muted)', transform: lang === 'ar' ? 'rotate(180deg)' : 'none' }} />
+          </button>
+        </div>
+      )}
 
       {/* App Info */}
       <div className="card card-sm" style={{ textAlign: 'center' }}>

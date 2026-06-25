@@ -159,6 +159,13 @@ export default function DashboardPage() {
   const pendingRevisions = revisionSessions.filter(r => r.status === 'pending').length;
   const missedRevisions = revisionSessions.filter(r => r.status === 'missed').length;
 
+  // Low-attendance alert: active students with recorded attendance below 75%.
+  const recordedIds = new Set((dbData?.attendance || []).map(a => a.studentId || a.student_id));
+  const lowAttendance = activeStudents
+    .filter(s => recordedIds.has(s.id) && (s.attendancePct ?? 0) < 75)
+    .sort((a, b) => (a.attendancePct ?? 0) - (b.attendancePct ?? 0))
+    .slice(0, 6);
+
   const greet = () => {
     return lang === 'ar' ? 'السلام عليكم' : 'Peace be upon you';
   };
@@ -323,6 +330,29 @@ export default function DashboardPage() {
 
         {/* Quick Actions + Revision Alerts */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Low attendance alert */}
+          {lowAttendance.length > 0 && (
+            <div style={{
+              background: 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
+              border: '1px solid #FECACA', borderRadius: 12, padding: '1rem',
+            }}>
+              <div className="flex items-center gap-2" style={{ marginBottom: '0.5rem' }}>
+                <AlertCircle size={16} style={{ color: '#DC2626' }} />
+                <span className="text-small font-semibold" style={{ color: '#991B1B' }}>
+                  {lang === 'ar' ? 'حضور منخفض' : 'Low Attendance'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                {lowAttendance.map(s => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#7F1D1D' }}>
+                    <span className="truncate" style={{ maxWidth: 140 }}>{s.fullName}</span>
+                    <span style={{ fontWeight: 700 }}>{s.attendancePct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Revision Alert */}
           {(pendingRevisions > 0 || missedRevisions > 0) && (
             <div style={{

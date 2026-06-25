@@ -361,6 +361,17 @@ export default function QuranProgressPage() {
 
   const pct = selectedStudent ? Math.min(100, Math.round((selectedStudent.totalAyahMemorized / totalQuranAyahs) * 100)) : 0;
 
+  // Today's plan: next un-memorized position + a juz to revise (rotates daily).
+  const todayPlan = (() => {
+    if (!selectedStudent) return null;
+    const iv = selectedStudent.memorizedIntervals || [];
+    const fm = furthestMemorized(iv);
+    const next = fm && fm < totalQuranAyahs ? fromGlobalAyah(fm + 1) : { surah: 1, ayah: 1 };
+    const juz = selectedStudent.juzCompleted || [];
+    const reviewJuz = juz.length ? juz[new Date().getDate() % juz.length] : null;
+    return { next, reviewJuz };
+  })();
+
   const recalculateStudentProgress = async (studentId) => {
     try {
       const { data: newSessions } = await supabase
@@ -527,6 +538,31 @@ export default function QuranProgressPage() {
               })}
             </div>
           </div>
+
+          {selectedStudent && todayPlan && (
+            <div className="card card-sm" style={{
+              background: 'linear-gradient(135deg, rgba(15,118,110,0.08), rgba(212,175,55,0.06))',
+              border: '1px solid rgba(15,118,110,0.2)',
+            }}>
+              <div className="text-small font-bold" style={{ marginBottom: '0.5rem' }}>
+                🗓️ {lang === 'ar' ? 'خطة اليوم' : "Today's plan"}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <BookOpen size={15} style={{ color: 'var(--emerald)' }} />
+                  <span className="text-xs text-muted">{lang === 'ar' ? 'التالي للحفظ:' : 'Next to memorize:'}</span>
+                  <span className="text-small font-semibold">{getSurahName(todayPlan.next.surah, lang)} {todayPlan.next.ayah}</span>
+                </div>
+                {todayPlan.reviewJuz && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <RefreshCw size={15} style={{ color: '#D97706' }} />
+                    <span className="text-xs text-muted">{lang === 'ar' ? 'مراجعة اليوم:' : 'Revise today:'}</span>
+                    <span className="text-small font-semibold">{lang === 'ar' ? `الجزء ${todayPlan.reviewJuz}` : `Juz ${todayPlan.reviewJuz}`}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {selectedStudent && studentSessions.length > 0 && (
             <div className="card" style={{
