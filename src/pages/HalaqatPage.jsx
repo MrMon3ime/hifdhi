@@ -2,19 +2,34 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { Clock, Users, MapPin, Plus, Edit2, Trash2, X } from 'lucide-react';
 
+// Circle schedule & times have no DB columns, so they are stored locally per circle.
+const HALAQA_EXTRA_KEY = 'hifz_halaqa_extra';
+export const loadHalaqaExtras = () => {
+  try { return JSON.parse(localStorage.getItem(HALAQA_EXTRA_KEY)) || {}; } catch { return {}; }
+};
+const saveHalaqaExtra = (id, extra) => {
+  if (!id) return;
+  try {
+    const all = loadHalaqaExtras();
+    all[id] = extra;
+    localStorage.setItem(HALAQA_EXTRA_KEY, JSON.stringify(all));
+  } catch { /* quota */ }
+};
+
 function HalaqaFormModal({ halaqa, onClose, onSave }) {
   const { t, lang, dbData, currentUser } = useApp();
   const isAdmin = currentUser?.role === 'admin';
+  const extra = (halaqa && loadHalaqaExtras()[halaqa.id]) || {};
 
   const [form, setForm] = useState({
     name: halaqa?.name || '',
     nameEn: halaqa?.nameEn || '',
     sheikhId: halaqa?.sheikhId || currentUser?.id || '',
     location: halaqa?.location || '',
-    startTime: halaqa?.startTime || '',
-    endTime: halaqa?.endTime || '',
+    startTime: extra.startTime || '',
+    endTime: extra.endTime || '',
     isActive: halaqa ? halaqa.isActive : true,
-    schedule: halaqa?.schedule || [],
+    schedule: extra.schedule || [],
   });
 
   const [loading, setLoading] = useState(false);
@@ -144,14 +159,18 @@ export default function HalaqatPage() {
   const myHalaqat = isAdmin
     ? (dbData?.halaqat || [])
     : (dbData?.halaqat || []).filter(h => h.sheikhId === currentUser?.id);
+  const halaqaExtras = loadHalaqaExtras();
 
   const handleSave = async (data) => {
     try {
+      const extra = { startTime: data.startTime || '', endTime: data.endTime || '', schedule: data.schedule || [] };
       if (editHalaqa) {
         await updateHalaqaFn(editHalaqa.id, data, currentUser);
+        saveHalaqaExtra(editHalaqa.id, extra);
         showToast(lang === 'ar' ? 'تم التعديل بنجاح' : 'Updated successfully');
       } else {
-        await addHalaqaFn(data, currentUser);
+        const newId = await addHalaqaFn(data, currentUser);
+        saveHalaqaExtra(newId, extra);
         showToast(lang === 'ar' ? 'تمت الإضافة بنجاح' : 'Added successfully');
       }
     } catch (err) {
@@ -195,7 +214,8 @@ export default function HalaqatPage() {
         <div className="grid-3">
           {myHalaqat.map(h => {
             const students = (dbData?.students || []).filter(s => s.halaqaId === h.id && s.status === 'active');
-            const schedule = h.schedule || [];
+            const ex = halaqaExtras[h.id] || {};
+            const schedule = ex.schedule || [];
             const sheikh = (dbData?.users || []).find(u => u.id === h.sheikhId);
             return (
               <div key={h.id} className="card" style={{ cursor: 'default', transition: 'transform 0.2s', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
@@ -257,10 +277,10 @@ export default function HalaqatPage() {
                   </div>
                 )}
 
-                {(h.startTime || h.endTime) && (
+                {(ex.startTime || ex.endTime) && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-muted)' }}>
                     <Clock size={13} />
-                    <span className="text-xs">{h.startTime || '—'} — {h.endTime || '—'}</span>
+                    <span className="text-xs">{ex.startTime || '—'} — {ex.endTime || '—'}</span>
                   </div>
                 )}
               </div>

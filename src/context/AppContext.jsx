@@ -252,9 +252,10 @@ export function AppProvider({ children }) {
 
   const addHalaqaFn = useCallback(async (data, currentUser) => {
     const payload = buildHalaqaPayload(data, currentUser);
-    const { error } = await supabase.from('halaqat').insert([payload]);
+    const { data: row, error } = await supabase.from('halaqat').insert([payload]).select('id').single();
     if (error) throw error;
     await fetchData();
+    return row?.id;
   }, [fetchData]);
 
   const updateHalaqaFn = useCallback(async (id, data, currentUser) => {

@@ -14,7 +14,8 @@ const STATUS_COLORS = {
 };
 
 function StudentFormModal({ student, onClose, onSave }) {
-  const { t, lang, showToast, dbData } = useApp();
+  const { t, lang, dbData, currentUser } = useApp();
+  const halaqaList = (dbData?.halaqat || []).filter(h => currentUser?.role === 'admin' || h.sheikhId === currentUser?.id);
   const [form, setForm] = useState({
     fullName: student?.fullName || '', 
     fullNameEn: student?.fullNameEn || '', 
@@ -92,6 +93,15 @@ function StudentFormModal({ student, onClose, onSave }) {
                   <option value="paused">{t('paused')}</option>
                 </select>
               </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">{lang === 'ar' ? 'الحلقة' : 'Circle'}</label>
+              <select className="select" value={form.halaqaId} onChange={e => handle('halaqaId', e.target.value)}>
+                <option value="">{lang === 'ar' ? 'بدون حلقة' : 'No circle'}</option>
+                {halaqaList.map(h => (
+                  <option key={h.id} value={h.id}>{lang === 'ar' ? h.name : (h.nameEn || h.name)}</option>
+                ))}
+              </select>
             </div>
             <div className="input-group">
               <label className="input-label">{t('notes')}</label>

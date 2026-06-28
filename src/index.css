@@ -250,6 +250,9 @@ ul {
 
 .main-content {
   flex: 1;
+  min-width: 0;
+  /* allow inner overflow-x:auto to contain wide content (tables) instead of
+     stretching the whole layout */
   margin-inline-start: 260px;
   min-height: 100vh;
   display: flex;

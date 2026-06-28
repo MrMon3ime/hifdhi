@@ -284,16 +284,18 @@ export default function ReportsPage() {
 
       {/* Date range */}
       <div className="card card-sm" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <span className="text-small font-semibold">{lang === 'ar' ? 'نطاق التاريخ:' : 'Date Range:'}</span>
-          <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-            <label className="input-label" style={{ whiteSpace: 'nowrap' }}>{t('dateFrom')}</label>
-            <input type="date" className="input" style={{ width: 'auto' }}
+        <div className="text-small font-semibold" style={{ marginBottom: '0.6rem' }}>
+          {lang === 'ar' ? 'نطاق التاريخ' : 'Date Range'}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+          <div className="input-group" style={{ margin: 0, minWidth: 0 }}>
+            <label className="input-label">{t('dateFrom')}</label>
+            <input type="date" className="input" style={{ width: '100%', minWidth: 0 }}
               value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
-          <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-            <label className="input-label" style={{ whiteSpace: 'nowrap' }}>{t('dateTo')}</label>
-            <input type="date" className="input" style={{ width: 'auto' }}
+          <div className="input-group" style={{ margin: 0, minWidth: 0 }}>
+            <label className="input-label">{t('dateTo')}</label>
+            <input type="date" className="input" style={{ width: '100%', minWidth: 0 }}
               value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
         </div>
@@ -442,21 +444,21 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 className="btn btn-sm"
-                style={{ flex: '1 1 30%', justifyContent: 'center', background: report.bg, color: report.color, fontWeight: 700 }}
+                style={{ flex: '1 1 96px', justifyContent: 'center', background: report.bg, color: report.color, fontWeight: 700 }}
                 onClick={() => handleExport(report.id, 'PDF')}
               >
                 <FileText size={14} /> {t('exportPDF')}
               </button>
               <button
                 className="btn btn-sm"
-                style={{ flex: '1 1 30%', justifyContent: 'center', background: '#ECFDF5', color: '#047857', fontWeight: 700 }}
+                style={{ flex: '1 1 96px', justifyContent: 'center', background: '#ECFDF5', color: '#047857', fontWeight: 700 }}
                 onClick={() => handleExport(report.id, 'EXCEL')}
               >
                 <Sheet size={14} /> {lang === 'ar' ? 'إكسل' : 'Excel'}
               </button>
               <button
                 className="btn btn-secondary btn-sm"
-                style={{ flex: '1 1 30%', justifyContent: 'center' }}
+                style={{ flex: '1 1 96px', justifyContent: 'center' }}
                 onClick={() => handleExport(report.id, 'CSV')}
               >
                 <Table size={14} /> {t('exportCSV')}
