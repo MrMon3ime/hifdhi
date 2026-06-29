@@ -13,7 +13,7 @@ import ReportsPage from './pages/ReportsPage.jsx';
 import HalaqatPage from './pages/HalaqatPage.jsx';
 import TeachersPage from './pages/TeachersPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
-import { Menu, Bell, ArrowLeft, ArrowRight, LogOut } from 'lucide-react';
+import { Menu, Bell, ArrowLeft, ArrowRight, LogOut, WifiOff, RefreshCw } from 'lucide-react';
 import { App as CapApp } from '@capacitor/app';
 
 const PAGE_TITLES = {
@@ -49,7 +49,7 @@ const DUAS = [
 ];
 
 function AppShell() {
-  const { currentUser, t, activePage, setActivePage, lang, isRTL, dbData, signOut } = useApp();
+  const { currentUser, t, activePage, setActivePage, lang, isRTL, dbData, signOut, online, pendingSync, syncNow } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [time, setTime] = useState(new Date());
@@ -81,13 +81,41 @@ function AppShell() {
     };
   }, [activePage, setActivePage]);
 
-  const pendingRevisions = (dbData?.revisions || []).filter(r => r.status === 'pending').length;
-  const notificationsList = [
-    { id: 1, title: lang === 'ar' ? 'مرحباً بك' : 'Welcome', desc: lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', time: lang === 'ar' ? 'الآن' : 'Now' }
-  ];
-  if (pendingRevisions > 0) {
-    notificationsList.unshift({ id: 2, title: lang === 'ar' ? 'مراجعات معلقة' : 'Pending Revisions', desc: lang === 'ar' ? `لديك ${pendingRevisions} مراجعات معلقة` : `You have ${pendingRevisions} pending revisions`, time: lang === 'ar' ? 'اليوم' : 'Today' });
+  // ── Real, role-scoped notifications computed from actual data ──────────────
+  const isAdmin = currentUser?.role === 'admin';
+  const todayStr = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+  const notifStudents = (dbData?.students || []).filter(s => isAdmin || s.sheikhId === currentUser?.id);
+  const notifActive = notifStudents.filter(s => s.status === 'active');
+  const notifIds = new Set(notifStudents.map(s => s.id));
+  const notifAtt = (dbData?.attendance || []).filter(a => notifIds.has(a.studentId || a.student_id));
+  const notifTodayAtt = notifAtt.filter(a => a.date === todayStr);
+  const notifRecorded = new Set(notifAtt.map(a => a.studentId || a.student_id));
+
+  const notifications = [];
+  if (notifActive.length > 0 && notifTodayAtt.length === 0) {
+    notifications.push({ id: 'att-today', icon: '📋', page: 'attendance',
+      title: lang === 'ar' ? 'لم يُسجّل الحضور اليوم' : 'Attendance not recorded',
+      desc: lang === 'ar' ? 'سجّل حضور الطلاب لهذا اليوم' : "Record today's attendance" });
   }
+  const absentToday = new Set(notifTodayAtt.filter(a => a.status === 'absent').map(a => a.studentId || a.student_id)).size;
+  if (absentToday > 0) {
+    notifications.push({ id: 'absent', icon: '❌', page: 'attendance',
+      title: lang === 'ar' ? 'غياب اليوم' : 'Absent today',
+      desc: lang === 'ar' ? `${absentToday} طالب غائب اليوم` : `${absentToday} student(s) absent today` });
+  }
+  const lowAtt = notifActive.filter(s => notifRecorded.has(s.id) && (s.attendancePct ?? 0) < 75).length;
+  if (lowAtt > 0) {
+    notifications.push({ id: 'low', icon: '⚠️', page: 'reports',
+      title: lang === 'ar' ? 'حضور منخفض' : 'Low attendance',
+      desc: lang === 'ar' ? `${lowAtt} طالب نسبة حضورهم أقل من 75%` : `${lowAtt} student(s) below 75% attendance` });
+  }
+  const notStarted = notifActive.filter(s => (s.totalAyahMemorized || 0) === 0).length;
+  if (notStarted > 0) {
+    notifications.push({ id: 'start', icon: '📖', page: 'quranProgress',
+      title: lang === 'ar' ? 'لم يبدؤوا الحفظ' : 'Not started yet',
+      desc: lang === 'ar' ? `${notStarted} طالب لم يُسجَّل لهم حفظ بعد` : `${notStarted} student(s) have no sessions yet` });
+  }
+  const openNotif = (page) => { setActivePage(page); setShowNotifications(false); };
 
   const renderPage = () => {
     switch (activePage) {
@@ -187,8 +215,29 @@ function AppShell() {
 
           {/* Right: Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flex: '1 1 200px', justifyContent: 'flex-end', position: 'relative' }}>
+            {/* Offline / sync status */}
+            {(!online || pendingSync > 0) && (
+              <button
+                onClick={() => online && syncNow()}
+                title={!online
+                  ? (lang === 'ar' ? 'غير متصل — سيتم الحفظ محلياً' : 'Offline — saved locally')
+                  : (lang === 'ar' ? 'مزامنة التغييرات الآن' : 'Sync now')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '0.3rem 0.6rem',
+                  borderRadius: 999, fontSize: '0.7rem', fontWeight: 700, cursor: online ? 'pointer' : 'default',
+                  border: '1px solid', fontFamily: 'inherit',
+                  background: !online ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                  color: !online ? '#DC2626' : '#B45309',
+                  borderColor: !online ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)',
+                }}
+              >
+                {!online
+                  ? <><WifiOff size={13} /> <span className="hide-on-mobile">{lang === 'ar' ? 'غير متصل' : 'Offline'}</span></>
+                  : <><RefreshCw size={13} /> {pendingSync}</>}
+              </button>
+            )}
             <button
-              className="btn btn-ghost" 
+              className="btn btn-ghost"
               onClick={signOut}
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--error)' }}
               title={t('signOut')}
@@ -197,18 +246,20 @@ function AppShell() {
               <span className="hide-on-mobile text-small font-semibold">{t('signOut')}</span>
             </button>
             {/* Notification bell */}
-            <button 
-              className="btn btn-ghost btn-icon" 
+            <button
+              className="btn btn-ghost btn-icon"
               style={{ position: 'relative' }}
               onClick={() => setShowNotifications(!showNotifications)}
+              id="notif-bell"
             >
               <Bell size={18} />
-              {notificationsList.length > 0 && (
+              {notifications.length > 0 && (
                 <span style={{
-                  position: 'absolute', top: 4, insetInlineEnd: 4,
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: 'var(--error)', border: '2px solid var(--bg-card)',
-                }} />
+                  position: 'absolute', top: 2, insetInlineEnd: 2,
+                  minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999,
+                  background: 'var(--error)', color: '#fff', border: '2px solid var(--bg-card)',
+                  fontSize: '0.6rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{notifications.length}</span>
               )}
             </button>
             
@@ -224,17 +275,28 @@ function AppShell() {
                 }}>
                   <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span className="text-small font-bold">{lang === 'ar' ? 'الإشعارات' : 'Notifications'}</span>
-                    <span className="badge badge-active">{notificationsList.length}</span>
+                    <span className="badge badge-active">{notifications.length}</span>
                   </div>
-                  <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                    {notificationsList.map(n => (
-                      <div key={n.id} style={{ padding: '1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-hover)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span className="text-small font-semibold">{n.title}</span>
-                          <span className="text-xs text-muted">{n.time}</span>
-                        </div>
-                        <div className="text-xs text-secondary">{n.desc}</div>
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {notifications.length === 0 ? (
+                      <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '1.5rem', marginBottom: 4 }}>✅</div>
+                        <div className="text-small">{lang === 'ar' ? 'كل شيء على ما يرام' : 'All caught up'}</div>
                       </div>
+                    ) : notifications.map(n => (
+                      <button key={n.id} onClick={() => openNotif(n.page)} style={{
+                        width: '100%', textAlign: 'inherit', border: 'none', cursor: 'pointer',
+                        padding: '0.875rem 1rem', borderBottom: '1px solid var(--border)',
+                        background: 'transparent', display: 'flex', gap: '0.625rem', alignItems: 'flex-start',
+                        fontFamily: 'inherit',
+                      }}>
+                        <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{n.icon}</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span className="text-small font-semibold" style={{ display: 'block' }}>{n.title}</span>
+                          <span className="text-xs text-secondary">{n.desc}</span>
+                        </span>
+                        {isRTL ? <ArrowLeft size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: 4 }} /> : <ArrowRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: 4 }} />}
+                      </button>
                     ))}
                   </div>
                 </div>

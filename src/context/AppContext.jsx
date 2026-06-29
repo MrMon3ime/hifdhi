@@ -3,8 +3,13 @@ import translations from '../i18n/translations.js';
 import { mockUsers, mockStudents, mockHalaqat, mockAttendance, mockSessions, mockRevisions, mockMatnProgress } from '../data/mockData.js';
 import { getCompletedJuz, getMemorizedIntervals, intervalsCount, furthestMemorized, fromGlobalAyah, getCompletedJuzFromIntervals } from '../data/quranData.js';
 import { supabase } from '../lib/supabase.js';
+import { isOnline, saveCache, loadCache, queueCount, enqueue, flushQueue } from '../lib/offline.js';
 
 const AppContext = createContext(null);
+
+const newId = () => (typeof crypto !== 'undefined' && crypto.randomUUID
+  ? crypto.randomUUID()
+  : 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2));
 
 // ── camelCase ↔ snake_case helpers ─────────────────────────────────────────
 const toCamel = (obj) => {
@@ -50,17 +55,21 @@ const computeAttendancePct = (studentId, attRows) => {
 };
 
 export function AppProvider({ children }) {
-  // ── Core data state ─────────────────────────────────────────────────────
-  const [dbData, setDbData] = useState({
-    users: mockUsers,
-    students: mockStudents,
-    halaqat: mockHalaqat,
-    attendance: mockAttendance,
-    sessions: mockSessions,
-    revisions: mockRevisions,
-    matnProgress: mockMatnProgress,
-    isLoading: true,
+  // ── Core data state (seeded from the offline cache when available) ───────
+  const [dbData, setDbData] = useState(() => {
+    const cached = loadCache();
+    if (cached && cached.students) return { ...cached, isLoading: !isOnline() ? false : true };
+    return {
+      users: mockUsers, students: mockStudents, halaqat: mockHalaqat,
+      attendance: mockAttendance, sessions: mockSessions,
+      revisions: mockRevisions, matnProgress: mockMatnProgress, isLoading: true,
+    };
   });
+
+  // ── Online / sync state ──────────────────────────────────────────────────
+  const [online, setOnline] = useState(isOnline());
+  const [pendingSync, setPendingSync] = useState(queueCount());
+  const refreshPending = () => setPendingSync(queueCount());
 
   const channelRef = useRef(null);
 
@@ -91,7 +100,7 @@ export function AppProvider({ children }) {
       const attList = attendance ? transformList(attendance) : [];
       const sessionList = sessions ? transformList(sessions) : [];
 
-      setDbData({
+      const next = {
         users:       users ? transformList(users) : mockUsers,
         students:    students
           ? transformList(students).map(safeStudent).map(st => {
@@ -118,12 +127,23 @@ export function AppProvider({ children }) {
         revisions:   mockRevisions,
         matnProgress: mockMatnProgress,
         isLoading: false,
-      });
+      };
+      setDbData(next);
+      saveCache(next);   // keep a copy for offline use
     } catch (err) {
-      console.error('Supabase fetchData failed:', err);
+      console.error('Supabase fetchData failed (using cached/offline data):', err);
       setDbData(prev => ({ ...prev, isLoading: false }));
     }
   }, []);
+
+  // ── Sync the offline write queue, then refresh ───────────────────────────
+  const syncNow = useCallback(async () => {
+    if (!isOnline()) return { flushed: 0, remaining: queueCount() };
+    const res = await flushQueue(supabase);
+    refreshPending();
+    if (res.flushed > 0) await fetchData();
+    return res;
+  }, [fetchData]);
 
   // ── Initial load + real-time subscription ────────────────────────────────
   useEffect(() => {
@@ -179,19 +199,48 @@ export function AppProvider({ children }) {
 
   const addStudentFn = useCallback(async (data, currentUser) => {
     const payload = buildStudentPayload(data, dbData.halaqat, currentUser);
-    const { error } = await supabase.from('students').insert([payload]);
-    if (error) throw error;
-    await fetchData();
+    if (isOnline()) {
+      const { error } = await supabase.from('students').insert([payload]);
+      if (error) throw error;
+      await fetchData();
+    } else {
+      const id = newId();
+      enqueue({ kind: 'insert', table: 'students', payload: { id, ...payload } });
+      refreshPending();
+      setDbData(prev => {
+        const st = { ...safeStudent(toCamel({ id, ...payload })), memorizedIntervals: [], attendancePct: 0 };
+        const next = { ...prev, students: [...prev.students, st] };
+        saveCache(next); return next;
+      });
+    }
   }, [dbData.halaqat, fetchData]);
 
   const updateStudentFn = useCallback(async (id, data, currentUser) => {
     const payload = buildStudentPayload(data, dbData.halaqat, currentUser);
-    const { error } = await supabase.from('students').update(payload).eq('id', id);
-    if (error) throw error;
-    await fetchData();
+    if (isOnline()) {
+      const { error } = await supabase.from('students').update(payload).eq('id', id);
+      if (error) throw error;
+      await fetchData();
+    } else {
+      enqueue({ kind: 'update', table: 'students', payload, matchCol: 'id', matchVal: id });
+      refreshPending();
+      setDbData(prev => {
+        const next = { ...prev, students: prev.students.map(s => s.id === id ? { ...s, ...toCamel(payload) } : s) };
+        saveCache(next); return next;
+      });
+    }
   }, [dbData.halaqat, fetchData]);
 
   const deleteStudentFn = useCallback(async (id) => {
+    if (!isOnline()) {
+      enqueue({ kind: 'studentDelete', id });
+      refreshPending();
+      setDbData(prev => {
+        const next = { ...prev, students: prev.students.filter(s => s.id !== id) };
+        saveCache(next); return next;
+      });
+      return;
+    }
     console.log('🗑️ Attempting to delete student:', id);
 
     // Step 1: Clean up child tables (ignore errors if table doesn't exist or RLS blocks)
@@ -252,24 +301,91 @@ export function AppProvider({ children }) {
 
   const addHalaqaFn = useCallback(async (data, currentUser) => {
     const payload = buildHalaqaPayload(data, currentUser);
-    const { data: row, error } = await supabase.from('halaqat').insert([payload]).select('id').single();
-    if (error) throw error;
-    await fetchData();
-    return row?.id;
+    if (isOnline()) {
+      const { data: row, error } = await supabase.from('halaqat').insert([payload]).select('id').single();
+      if (error) throw error;
+      await fetchData();
+      return row?.id;
+    }
+    const id = newId();
+    enqueue({ kind: 'insert', table: 'halaqat', payload: { id, ...payload } });
+    refreshPending();
+    setDbData(prev => {
+      const next = { ...prev, halaqat: [...prev.halaqat, toCamel({ id, ...payload })] };
+      saveCache(next); return next;
+    });
+    return id;
   }, [fetchData]);
 
   const updateHalaqaFn = useCallback(async (id, data, currentUser) => {
     const payload = buildHalaqaPayload(data, currentUser);
-    const { error } = await supabase.from('halaqat').update(payload).eq('id', id);
-    if (error) throw error;
-    await fetchData();
+    if (isOnline()) {
+      const { error } = await supabase.from('halaqat').update(payload).eq('id', id);
+      if (error) throw error;
+      await fetchData();
+    } else {
+      enqueue({ kind: 'update', table: 'halaqat', payload, matchCol: 'id', matchVal: id });
+      refreshPending();
+      setDbData(prev => {
+        const next = { ...prev, halaqat: prev.halaqat.map(h => h.id === id ? { ...h, ...toCamel(payload) } : h) };
+        saveCache(next); return next;
+      });
+    }
   }, [fetchData]);
 
   const deleteHalaqaFn = useCallback(async (id) => {
+    if (!isOnline()) {
+      enqueue({ kind: 'halaqaDelete', id });
+      refreshPending();
+      setDbData(prev => {
+        const next = {
+          ...prev,
+          halaqat: prev.halaqat.filter(h => h.id !== id),
+          students: prev.students.map(s => s.halaqaId === id ? { ...s, halaqaId: '' } : s),
+        };
+        saveCache(next); return next;
+      });
+      return;
+    }
     await supabase.from('students').update({ halaqa_id: null }).eq('halaqa_id', id);
     const { error } = await supabase.from('halaqat').delete().eq('id', id);
     if (error) throw error;
     await fetchData();
+  }, [fetchData]);
+
+  // ── Attendance (offline-aware: queue + optimistic update) ─────────────────
+  const queueAttendanceLocally = (date, halaqaId, studentIds, payload) => {
+    enqueue({ kind: 'attendanceSave', date, halaqaId: halaqaId || null, studentIds, payload });
+    refreshPending();
+    setDbData(prev => {
+      const keep = prev.attendance.filter(a => {
+        const sid = a.studentId || a.student_id;
+        const sameDay = a.date === date;
+        const sameH = (a.halaqaId || a.halaqa_id || '') === (halaqaId || '');
+        return !(studentIds.includes(sid) && sameDay && sameH);
+      });
+      const nextAtt = [...keep, ...payload];
+      const students = prev.students.map(s => ({ ...s, attendancePct: computeAttendancePct(s.id, nextAtt) }));
+      const next = { ...prev, attendance: nextAtt, students };
+      saveCache(next); return next;
+    });
+  };
+
+  const saveAttendanceFn = useCallback(async ({ date, halaqaId, studentIds, payload }) => {
+    if (!isOnline()) { queueAttendanceLocally(date, halaqaId, studentIds, payload); return; }
+    try {
+      let del = supabase.from('attendance').delete().in('student_id', studentIds).eq('date', date);
+      del = halaqaId ? del.eq('halaqa_id', halaqaId) : del.is('halaqa_id', null);
+      const { error: delErr } = await del;
+      if (delErr) throw delErr;
+      const { error } = await supabase.from('attendance').insert(payload);
+      if (error) throw error;
+      await fetchData();
+    } catch (e) {
+      // Network failure even though the browser thinks it's online → queue it.
+      if (/fetch|network|failed|timeout/i.test(e?.message || '')) { queueAttendanceLocally(date, halaqaId, studentIds, payload); return; }
+      throw e;
+    }
   }, [fetchData]);
 
   // ── Language ─────────────────────────────────────────────────────────────
@@ -341,6 +457,25 @@ export function AppProvider({ children }) {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
   }, []);
 
+  // ── Auto-sync when the connection returns ─────────────────────────────────
+  useEffect(() => {
+    const goOnline = async () => {
+      setOnline(true);
+      const res = await syncNow();
+      if (res && res.flushed > 0) {
+        showToast(lang === 'ar' ? `تمت مزامنة ${res.flushed} تغيير` : `Synced ${res.flushed} change(s)`);
+      }
+    };
+    const goOffline = () => setOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    if (isOnline() && queueCount() > 0) goOnline(); // sync leftovers on load
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, [syncNow, showToast, lang]);
+
   // ── Active page ───────────────────────────────────────────────────────────
   const [activePage, setActivePage] = useState('dashboard');
 
@@ -368,7 +503,12 @@ export function AppProvider({ children }) {
     addHalaqaFn,
     updateHalaqaFn,
     deleteHalaqaFn,
+    saveAttendanceFn,
     refreshData: fetchData,
+    // Offline / sync
+    online,
+    pendingSync,
+    syncNow,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

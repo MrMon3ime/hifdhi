@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext.jsx';
-import { supabase } from '../lib/supabase.js';
 import { CheckCircle2, XCircle, Clock, ClipboardList, Save } from 'lucide-react';
 
 const STATUS_OPTIONS = ['present', 'late', 'excused', 'absent'];
@@ -11,7 +10,7 @@ const STATUS_ICONS = {
 // Removed HALQA_TIMES to rely on database halaqat list
 
 export default function AttendancePage() {
-  const { t, lang, currentUser, showToast, dbData } = useApp();
+  const { t, lang, currentUser, showToast, dbData, saveAttendanceFn, online } = useApp();
   const isAdmin = currentUser?.role === 'admin';
 
   const myHalaqat = isAdmin
@@ -95,26 +94,17 @@ export default function AttendancePage() {
         date: date,
         status: attendance[s.id],
       }));
-
-      // Delete existing records for this date + halqa, then re-insert
       const studentIds = studentsWithStatus.map(s => s.id);
-      if (studentIds.length > 0) {
-        let del = supabase
-          .from('attendance')
-          .delete()
-          .in('student_id', studentIds)
-          .eq('date', date);
-        // `.eq` won't match NULLs, so use `.is` when there is no halqa
-        del = halaqaId === null ? del.is('halaqa_id', null) : del.eq('halaqa_id', halaqaId);
-        const { error: delError } = await del;
-        if (delError) throw delError;
 
-        const { error } = await supabase.from('attendance').insert(payload);
-        if (error) throw error;
-      }
+      // Offline-aware: saves to the server when online, or queues locally and
+      // syncs automatically when the connection returns.
+      await saveAttendanceFn({ date, halaqaId, studentIds, payload });
 
       setSaved(true);
-      showToast(lang === 'ar' ? 'تم حفظ الحضور بنجاح' : 'Attendance saved successfully');
+      showToast(online
+        ? (lang === 'ar' ? 'تم حفظ الحضور بنجاح' : 'Attendance saved successfully')
+        : (lang === 'ar' ? 'تم الحفظ دون اتصال — ستتم المزامنة تلقائياً' : 'Saved offline — will sync automatically'),
+        online ? 'success' : 'warning');
     } catch (err) {
       console.error(err);
       showToast(`Error: ${err.message}`, 'error');

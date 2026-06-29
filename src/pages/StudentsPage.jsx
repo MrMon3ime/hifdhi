@@ -4,7 +4,7 @@ import { getSurahName } from '../data/quranData.js';
 import { supabase } from '../lib/supabase.js';
 import ProgressMap from '../components/ProgressMap.jsx';
 import { printOrShareHtml, docStyles } from '../lib/docExport.js';
-import { Search, Plus, Edit2, Archive, Eye, X, Users, Trash2, Download, FileText, Award, Upload } from 'lucide-react';
+import { Search, Plus, Edit2, Archive, ArchiveRestore, Eye, X, Users, Trash2, Download, FileText, Award, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -459,6 +459,15 @@ export default function StudentsPage() {
     }
   };
 
+  const handleUnarchive = async (id) => {
+    try {
+      await updateStudentFn(id, { ...allStudents.find(s => s.id === id), status: 'active' }, currentUser);
+      showToast(lang === 'ar' ? 'تمت إعادة الطالب' : 'Student restored');
+    } catch (err) {
+      showToast(`خطأ: ${err.message}`, 'error');
+    }
+  };
+
   const handleDelete = async (id) => {
     if (window.confirm(lang === 'ar' ? 'هل أنت متأكد من حذف هذا الطالب نهائياً؟' : 'Permanently delete this student?')) {
       try {
@@ -675,7 +684,7 @@ export default function StudentsPage() {
                         >
                           <Edit2 size={14} />
                         </button>
-                        {student.status !== 'archived' && (
+                        {student.status !== 'archived' ? (
                           <button
                             className="btn btn-ghost btn-icon btn-sm"
                             onClick={() => handleArchive(student.id)}
@@ -683,6 +692,15 @@ export default function StudentsPage() {
                             style={{ color: 'var(--text-muted)' }}
                           >
                             <Archive size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            onClick={() => handleUnarchive(student.id)}
+                            title={lang === 'ar' ? 'إلغاء الأرشفة' : 'Unarchive'}
+                            style={{ color: 'var(--emerald)' }}
+                          >
+                            <ArchiveRestore size={14} />
                           </button>
                         )}
                         <button
