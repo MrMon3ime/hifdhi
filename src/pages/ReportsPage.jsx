@@ -104,6 +104,10 @@ export default function ReportsPage() {
     present: '#10B981', late: '#F59E0B', excused: '#3B82F6', absent: '#EF4444',
   })[st] || 'var(--text-muted)';
   const dayLabel = (d) => { const dt = new Date(d); return String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0'); };
+  const weekdayShort = (d) => new Date(d).toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
+  const todayStr = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+  // Newest day first so recent attendance is visible without scrolling (RTL/LTR).
+  const displayDates = [...dateList].reverse();
 
   const handleExport = (reportId, format) => {
     try {
@@ -414,42 +418,59 @@ export default function ReportsPage() {
         </div>
 
         {myStudents.length === 0 || dateList.length === 0 ? (
-          <div className="text-small text-muted" style={{ padding: '1rem 0' }}>{t('noData')}</div>
+          <div className="empty-state" style={{ padding: '2rem 1rem' }}>
+            <div className="text-subtitle">{t('noData')}</div>
+            <p className="text-xs text-muted">{lang === 'ar' ? 'لا يوجد طلاب أو تواريخ في النطاق المحدد' : 'No students or dates in the selected range'}</p>
+          </div>
         ) : (
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: '0.72rem', minWidth: 'max-content' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 10, border: '1px solid var(--border)' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: '0.72rem', minWidth: 'max-content', width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ position: 'sticky', insetInlineStart: 0, background: 'var(--bg-card)', zIndex: 2, padding: '0.4rem 0.6rem', textAlign: 'start', borderBottom: '2px solid var(--border)', minWidth: 120 }}>
+                  <th style={{ position: 'sticky', insetInlineStart: 0, background: 'var(--bg-input)', zIndex: 2, padding: '0.5rem 0.6rem', textAlign: 'start', borderBottom: '2px solid var(--border)', minWidth: 110 }}>
                     {lang === 'ar' ? 'الطالب' : 'Student'}
                   </th>
-                  {dateList.map(d => (
-                    <th key={d} title={d} style={{ padding: '0.4rem 0.3rem', borderBottom: '2px solid var(--border)', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{dayLabel(d)}</th>
+                  <th style={{ padding: '0.5rem 0.4rem', background: '#ECFDF5', color: '#047857', borderBottom: '2px solid var(--border)', fontWeight: 800 }}>{lang === 'ar' ? 'ح' : 'P'}</th>
+                  <th style={{ padding: '0.5rem 0.4rem', background: '#FEF2F2', color: '#B91C1C', borderBottom: '2px solid var(--border)', fontWeight: 800 }}>{lang === 'ar' ? 'غ' : 'A'}</th>
+                  {displayDates.map(d => (
+                    <th key={d} title={`${weekdayShort(d)} ${d}`} style={{
+                      padding: '0.4rem 0.35rem', borderBottom: '2px solid var(--border)', color: d === todayStr ? 'var(--emerald)' : 'var(--text-muted)',
+                      fontWeight: 700, whiteSpace: 'nowrap', background: d === todayStr ? 'rgba(15,118,110,0.08)' : 'transparent', lineHeight: 1.2,
+                    }}>
+                      <div>{dayLabel(d)}</div>
+                      <div style={{ fontSize: '0.58rem', fontWeight: 500, opacity: 0.8 }}>{weekdayShort(d)}</div>
+                    </th>
                   ))}
-                  <th style={{ padding: '0.4rem 0.5rem', borderBottom: '2px solid var(--border)', color: '#10B981' }}>{lang === 'ar' ? 'ح' : 'P'}</th>
-                  <th style={{ padding: '0.4rem 0.5rem', borderBottom: '2px solid var(--border)', color: '#EF4444' }}>{lang === 'ar' ? 'غ' : 'A'}</th>
                 </tr>
               </thead>
               <tbody>
-                {myStudents.map(s => {
+                {myStudents.map((s, ri) => {
                   let present = 0, absent = 0;
+                  displayDates.forEach(d => {
+                    const st = attMap[s.id + '|' + d];
+                    if (st === 'present' || st === 'late') present++;
+                    else if (st === 'absent') absent++;
+                  });
+                  const rowBg = ri % 2 ? 'var(--bg-hover)' : 'var(--bg-card)';
                   return (
                     <tr key={s.id}>
-                      <td style={{ position: 'sticky', insetInlineStart: 0, background: 'var(--bg-card)', zIndex: 1, padding: '0.35rem 0.6rem', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{s.fullName}</td>
-                      {dateList.map(d => {
+                      <td style={{ position: 'sticky', insetInlineStart: 0, background: rowBg, zIndex: 1, padding: '0.4rem 0.6rem', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{s.fullName}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 800, color: '#10B981', borderBottom: '1px solid var(--border)', background: rowBg }}>{present}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 800, color: '#EF4444', borderBottom: '1px solid var(--border)', background: rowBg }}>{absent}</td>
+                      {displayDates.map(d => {
                         const st = attMap[s.id + '|' + d];
-                        if (st === 'present' || st === 'late') present++;
-                        else if (st === 'absent') absent++;
                         return (
-                          <td key={d} style={{ textAlign: 'center', padding: '0.25rem', borderBottom: '1px solid var(--border)' }}>
-                            <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 5, fontWeight: 700, color: st ? '#fff' : 'var(--text-muted)', background: st ? statusColor(st) : 'transparent' }}>
-                              {statusCode(st)}
-                            </span>
+                          <td key={d} style={{ textAlign: 'center', padding: '0.25rem', borderBottom: '1px solid var(--border)', background: d === todayStr ? 'rgba(15,118,110,0.05)' : rowBg }}>
+                            <span title={st ? `${dayLabel(d)} · ${statusCode(st)}` : dayLabel(d)} style={{
+                              display: 'inline-flex', width: 22, height: 22, alignItems: 'center', justifyContent: 'center',
+                              borderRadius: '50%', fontWeight: 700,
+                              color: st ? '#fff' : 'var(--text-muted)',
+                              background: st ? statusColor(st) : 'var(--bg-input)',
+                              opacity: st ? 1 : 0.5,
+                            }}>{statusCode(st)}</span>
                           </td>
                         );
                       })}
-                      <td style={{ textAlign: 'center', fontWeight: 700, color: '#10B981', borderBottom: '1px solid var(--border)' }}>{present}</td>
-                      <td style={{ textAlign: 'center', fontWeight: 700, color: '#EF4444', borderBottom: '1px solid var(--border)' }}>{absent}</td>
                     </tr>
                   );
                 })}

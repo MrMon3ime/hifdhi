@@ -16,6 +16,19 @@ const saveHalaqaExtra = (id, extra) => {
   } catch { /* quota */ }
 };
 
+// Prayer-based session times (e.g. after Fajr / after Maghrib).
+export const PRAYER_PERIODS = [
+  { key: 'fajr', ar: 'بعد صلاة الفجر', en: 'After Fajr' },
+  { key: 'dhuhr', ar: 'بعد صلاة الظهر', en: 'After Dhuhr' },
+  { key: 'asr', ar: 'بعد صلاة العصر', en: 'After Asr' },
+  { key: 'maghrib', ar: 'بعد صلاة المغرب', en: 'After Maghrib' },
+  { key: 'isha', ar: 'بعد صلاة العشاء', en: 'After Isha' },
+];
+export const periodLabel = (key, lang) => {
+  const p = PRAYER_PERIODS.find(x => x.key === key);
+  return p ? (lang === 'ar' ? p.ar : p.en) : '';
+};
+
 function HalaqaFormModal({ halaqa, onClose, onSave }) {
   const { t, lang, dbData, currentUser } = useApp();
   const isAdmin = currentUser?.role === 'admin';
@@ -26,6 +39,7 @@ function HalaqaFormModal({ halaqa, onClose, onSave }) {
     nameEn: halaqa?.nameEn || '',
     sheikhId: halaqa?.sheikhId || currentUser?.id || '',
     location: halaqa?.location || '',
+    period: extra.period || '',
     startTime: extra.startTime || '',
     endTime: extra.endTime || '',
     isActive: halaqa ? halaqa.isActive : true,
@@ -97,6 +111,16 @@ function HalaqaFormModal({ halaqa, onClose, onSave }) {
               <input className="input" value={form.location} onChange={e => handle('location', e.target.value)} />
             </div>
 
+            <div className="input-group">
+              <label className="input-label">{lang === 'ar' ? 'وقت الحلقة (الصلاة)' : 'Session time (prayer)'}</label>
+              <select className="select" value={form.period} onChange={e => handle('period', e.target.value)}>
+                <option value="">{lang === 'ar' ? 'غير محدد' : 'Not set'}</option>
+                {PRAYER_PERIODS.map(p => (
+                  <option key={p.key} value={p.key}>{lang === 'ar' ? p.ar : p.en}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="grid-2">
               <div className="input-group">
                 <label className="input-label">{lang === 'ar' ? 'وقت البدء' : 'Start Time'}</label>
@@ -163,7 +187,7 @@ export default function HalaqatPage() {
 
   const handleSave = async (data) => {
     try {
-      const extra = { startTime: data.startTime || '', endTime: data.endTime || '', schedule: data.schedule || [] };
+      const extra = { period: data.period || '', startTime: data.startTime || '', endTime: data.endTime || '', schedule: data.schedule || [] };
       if (editHalaqa) {
         await updateHalaqaFn(editHalaqa.id, data, currentUser);
         saveHalaqaExtra(editHalaqa.id, extra);
@@ -274,6 +298,12 @@ export default function HalaqatPage() {
                         fontSize: '0.7rem', fontWeight: 600,
                       }}>{day}</span>
                     ))}
+                  </div>
+                )}
+
+                {ex.period && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', alignSelf: 'flex-start', padding: '0.25rem 0.625rem', borderRadius: 999, background: 'rgba(15,118,110,0.1)', color: 'var(--emerald)', fontSize: '0.72rem', fontWeight: 700 }}>
+                    <Clock size={12} /> {periodLabel(ex.period, lang)}
                   </div>
                 )}
 
