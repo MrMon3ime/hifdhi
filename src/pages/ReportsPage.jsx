@@ -16,9 +16,28 @@ export default function ReportsPage() {
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // Compute attendance dynamically based on date range
+  const isAdmin = currentUser?.role === 'admin';
+  const [selectedHalaqa, setSelectedHalaqa] = useState('all');
+  const halaqaList = (dbData?.halaqat || []).filter(h => isAdmin || h.sheikhId === currentUser?.id || h.sheikh_id === currentUser?.id);
+  const halaqaOf = (a) => a.halaqaId || a.halaqa_id || '';
+  const studentHalaqa = (s) => s.halaqaId || s.halaqa_id || '';
+
+  // Students in scope: teacher's students, optionally narrowed to one circle.
+  const baseStudents = isAdmin
+    ? (dbData?.students || [])
+    : (dbData?.students || []).filter(s => s.sheikhId === currentUser?.id || s.sheikh_id === currentUser?.id);
+  const scopedStudents = selectedHalaqa === 'all'
+    ? baseStudents
+    : baseStudents.filter(s => studentHalaqa(s) === selectedHalaqa);
+  const scopedIds = new Set(scopedStudents.map(s => s.id));
+
+  // Attendance within the date range, scope, and selected circle.
   const allAttendance = dbData?.attendance || [];
-  const filteredAttendance = allAttendance.filter(a => a.date >= dateFrom && a.date <= dateTo);
+  const filteredAttendance = allAttendance.filter(a =>
+    a.date >= dateFrom && a.date <= dateTo
+    && scopedIds.has(a.studentId || a.student_id)
+    && (selectedHalaqa === 'all' || halaqaOf(a) === selectedHalaqa)
+  );
 
   const safeStudent = (s) => {
     const studentAtt = filteredAttendance.filter(a => a.student_id === s.id || a.studentId === s.id);
@@ -35,10 +54,17 @@ export default function ReportsPage() {
     };
   };
 
-  const myStudents = (currentUser?.role === 'admin'
-    ? (dbData?.students || [])
-    : (dbData?.students || []).filter(s => s.sheikhId === currentUser?.id || s.sheikh_id === currentUser?.id)
-  ).map(safeStudent);
+  const myStudents = scopedStudents.map(safeStudent);
+
+  const selectedHalaqaName = selectedHalaqa === 'all'
+    ? (lang === 'ar' ? 'كل الحلقات' : 'All circles')
+    : (() => { const h = halaqaList.find(x => x.id === selectedHalaqa); return h ? (lang === 'ar' ? h.name : (h.nameEn || h.name)) : ''; })();
+
+  // Attendance totals for the current scope.
+  const attTotals = { present: 0, late: 0, excused: 0, absent: 0 };
+  filteredAttendance.forEach(a => { if (attTotals[a.status] !== undefined) attTotals[a.status]++; });
+  const totalMarked = attTotals.present + attTotals.late + attTotals.excused + attTotals.absent;
+  const overallRate = totalMarked ? Math.round((attTotals.present + attTotals.late) / totalMarked * 100) : 0;
 
   // ── Day-by-day attendance ─────────────────────────────────────────────────
   const dateList = (() => {
@@ -106,6 +132,15 @@ export default function ReportsPage() {
           });
           return [s.fullName, ...cells, present, absent];
         });
+      } else if (reportId === 'summary') {
+        head = [L('الاسم', 'Name'), L('حاضر', 'Present'), L('متأخر', 'Late'), L('معذور', 'Excused'), L('غائب', 'Absent'), L('النسبة', 'Rate %')];
+        body = myStudents.map(s => {
+          const c = { present: 0, late: 0, excused: 0, absent: 0 };
+          filteredAttendance.forEach(a => { if ((a.studentId || a.student_id) === s.id && c[a.status] !== undefined) c[a.status]++; });
+          const tot = c.present + c.late + c.excused + c.absent;
+          const rate = tot ? Math.round((c.present + c.late) / tot * 100) : 0;
+          return [s.fullName, c.present, c.late, c.excused, c.absent, `${rate}%`];
+        });
       } else {
         head = [L('الاسم', 'Name'), L('الاسم (إنجليزي)', 'Name (EN)'), L('السورة الحالية', 'Current Surah'), L('الآية', 'Ayah'), L('إجمالي الآيات', 'Total Ayahs'), L('نسبة الحضور', 'Attendance %')];
         body = myStudents.map(s => [s.fullName, s.fullNameEn || '', getSurahName(s.currentSurah, lang), s.currentAyah, s.totalAyahMemorized, `${s.attendancePct}%`]);
@@ -113,12 +148,14 @@ export default function ReportsPage() {
 
       const reportTitles = {
         attendance:    L('تقرير الحضور', 'Attendance Report'),
+        summary:       L('ملخص الحضور', 'Attendance Summary'),
         daily:         L('تقرير الحضور اليومي', 'Daily Attendance Report'),
         progress:      L('تقرير التقدم', 'Progress Report'),
         revision:      L('تقرير المراجعة', 'Revision Report'),
         comprehensive: L('تقرير شامل', 'Comprehensive Report'),
       };
-      const reportTitle = reportTitles[reportId] || L('تقرير', 'Report');
+      const reportTitle = (reportTitles[reportId] || L('تقرير', 'Report'))
+        + (selectedHalaqa !== 'all' ? ` — ${selectedHalaqaName}` : '');
 
       const fileName = `report_${reportId}_${new Date().toISOString().split('T')[0]}`;
       const isNative = Capacitor.isNativePlatform();
@@ -206,7 +243,7 @@ export default function ReportsPage() {
           </head>
           <body>
             <h1>${escHtml(reportTitle)}</h1>
-            <div class="sub">${escHtml(rangeLine)} · ${myStudents.length} ${escHtml(L('طالب', 'students'))}</div>
+            <div class="sub">${escHtml(selectedHalaqaName)} · ${escHtml(rangeLine)} · ${myStudents.length} ${escHtml(L('طالب', 'students'))}</div>
             <table>
               <thead><tr>${head.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead>
               <tbody>${body.map(row => `<tr>${row.map(cell => `<td>${escHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
@@ -282,12 +319,20 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      {/* Date range */}
+      {/* Filters: circle + date range */}
       <div className="card card-sm" style={{ marginBottom: '1.5rem' }}>
         <div className="text-small font-semibold" style={{ marginBottom: '0.6rem' }}>
-          {lang === 'ar' ? 'نطاق التاريخ' : 'Date Range'}
+          {lang === 'ar' ? 'التصفية' : 'Filters'}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+          <div className="input-group" style={{ margin: 0, minWidth: 0 }}>
+            <label className="input-label">{lang === 'ar' ? 'الحلقة' : 'Circle'}</label>
+            <select className="select" style={{ width: '100%', minWidth: 0 }}
+              value={selectedHalaqa} onChange={e => setSelectedHalaqa(e.target.value)}>
+              <option value="all">{lang === 'ar' ? 'كل الحلقات' : 'All circles'}</option>
+              {halaqaList.map(h => <option key={h.id} value={h.id}>{lang === 'ar' ? h.name : (h.nameEn || h.name)}</option>)}
+            </select>
+          </div>
           <div className="input-group" style={{ margin: 0, minWidth: 0 }}>
             <label className="input-label">{t('dateFrom')}</label>
             <input type="date" className="input" style={{ width: '100%', minWidth: 0 }}
@@ -301,13 +346,48 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Attendance statistics summary */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.875rem' }}>
+          <div>
+            <h3 className="text-subtitle font-bold">{lang === 'ar' ? 'إحصاءات الحضور' : 'Attendance Statistics'}</h3>
+            <p className="text-xs text-muted">{selectedHalaqaName} · {myStudents.length} {lang === 'ar' ? 'طالب' : 'students'}</p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-sm" style={{ background: '#ECFDF5', color: '#0F766E', fontWeight: 700 }} onClick={() => handleExport('summary', 'PDF')}>
+              <FileText size={14} /> {t('exportPDF')}
+            </button>
+            <button className="btn btn-sm" style={{ background: '#ECFDF5', color: '#047857', fontWeight: 700 }} onClick={() => handleExport('summary', 'EXCEL')}>
+              <Sheet size={14} /> {lang === 'ar' ? 'إكسل' : 'Excel'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => handleExport('summary', 'CSV')}>
+              <Table size={14} /> {t('exportCSV')}
+            </button>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: '0.6rem' }}>
+          {[
+            { label: lang === 'ar' ? 'حاضر' : 'Present', value: attTotals.present, color: '#10B981' },
+            { label: lang === 'ar' ? 'متأخر' : 'Late', value: attTotals.late, color: '#F59E0B' },
+            { label: lang === 'ar' ? 'معذور' : 'Excused', value: attTotals.excused, color: '#3B82F6' },
+            { label: lang === 'ar' ? 'غائب' : 'Absent', value: attTotals.absent, color: '#EF4444' },
+            { label: lang === 'ar' ? 'نسبة الحضور' : 'Rate', value: `${overallRate}%`, color: '#0F766E' },
+          ].map((s, i) => (
+            <div key={i} style={{ background: 'var(--bg-input)', borderRadius: 10, padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+              <div className="text-xs text-muted" style={{ marginTop: 4 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Day-by-day attendance */}
       <div className="card" style={{ marginBottom: '1.5rem', overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.875rem' }}>
           <div>
             <h3 className="text-subtitle font-bold">{lang === 'ar' ? 'الحضور اليومي' : 'Daily Attendance'}</h3>
             <p className="text-xs text-muted">
-              {lang === 'ar' ? `يوم بيوم خلال النطاق المحدد · ${dateList.length} يوم` : `Day by day over the selected range · ${dateList.length} days`}
+              {selectedHalaqaName} · {lang === 'ar' ? `${dateList.length} يوم` : `${dateList.length} days`}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
